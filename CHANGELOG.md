@@ -4,6 +4,24 @@ All notable changes to the **Ave — Retail Sales & Inventory Management System*
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-09-17
+
+### Added
+- **Production-Ready Multi-Engine Barcode Scanner (`BarcodeScannerModal.tsx`)**:
+  - Integrated `html5-qrcode` (ZXing JS decoder) alongside native `window.BarcodeDetector`, providing accurate 1D linear barcode decoding (EAN-13, UPC, Code 128) across desktop webcams, mobile Safari, and Firefox.
+  - Implemented `requestAnimationFrame` detection loop with 10 FPS frame throttling and track teardown on unmount.
+  - Added hardware barcode gun wedge listener with 1.5s duplicate scan debouncing and `Enter`/`Tab` key handling.
+  - Added Web Audio API synthesized 880Hz audio beep tone and visual scan success badge on detection.
+  - Integrated camera barcode scanner modal into both Inventory View and POS Cashier View.
+
+### Fixed
+- **Tooltip Right-Edge Boundary Clipping (`CustomTooltip.tsx`)**:
+  - Added `align` prop (`'center' | 'left' | 'right'`) to `CustomTooltip.tsx` so tooltips near container borders grow inward without text truncation.
+- **Modal Layering & Backdrop Blur Coverage (`BarcodeScannerModal.tsx` & `App.tsx`)**:
+  - Updated modal backdrop container `z-index` to `z-[9999]` and removed parent relative positioning context in `App.tsx`, ensuring backdrop overlay and blur cover the top header bar completely.
+
+---
+
 ## [1.8.0] - 2026-09-16
 
 ### Changed & Restructured
