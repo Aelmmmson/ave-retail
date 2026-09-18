@@ -1,0 +1,566 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum RoleType {
+  OWNER
+  ADMIN
+  MANAGER
+  SUPERVISOR
+  CASHIER
+  INVENTORY_OFFICER
+  ACCOUNTANT
+}
+
+enum ShiftStatus {
+  OPEN
+  CLOSED
+  RECONCILED
+}
+
+enum SaleStatus {
+  COMPLETED
+  PARTIALLY_REFUNDED
+  FULLY_REFUNDED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  MOBILE_MONEY
+  CARD
+  BANK_TRANSFER
+  STORE_CREDIT
+}
+
+enum InventoryMovementType {
+  SALE_DEDUCTION
+  REFUND_RESTORATION
+  STOCK_IN
+  ADJUSTMENT_DAMAGE
+  ADJUSTMENT_CORRECTION
+  TRANSFER_OUT
+  TRANSFER_IN
+}
+
+enum CashMovementType {
+  CASH_IN
+  CASH_OUT
+  FLOAT_ADDITION
+  PETTY_CASH
+}
+
+enum LedgerEntryType {
+  CREDIT_SALE
+  DEBT_PAYMENT
+  CREDIT_NOTE
+  ADJUSTMENT
+}
+
+enum TransferStatus {
+  DRAFT
+  REQUESTED
+  APPROVED
+  DISPATCHED
+  RECEIVED
+  CANCELLED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED_AMOUNT
+}
+
+enum DiscountScope {
+  ALL_PRODUCTS
+  CATEGORY
+  VARIANT
+}
+
+model Organization {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  name      String   @db.VarChar(191)
+  code      String   @unique @db.VarChar(64)
+  tagline   String?  @db.VarChar(191)
+  logoUrl   String?  @db.LongText
+  taxNumber String?  @db.VarChar(64)
+  phone     String?  @db.VarChar(64)
+  address   String?  @db.VarChar(191)
+  status    String   @default("ACTIVE") @db.VarChar(36) // ACTIVE | INACTIVE
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches   Branch[]
+  users      User[]
+  categories Category[]
+  brands     Brand[]
+  products   Product[]
+  expenses   Expense[]
+}
+
+model Branch {
+  id             String       @id @default(uuid()) @db.VarChar(36)
+  organizationId String       @db.VarChar(36)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name           String       @db.VarChar(191)
+  code           String       @unique @db.VarChar(64)
+  phone          String?      @db.VarChar(64)
+  address        String?      @db.VarChar(191)
+  status         String       @default("ACTIVE") @db.VarChar(36) // ACTIVE | INACTIVE
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  warehouses Warehouse[]
+  registers  Register[]
+  users      User[]
+  shifts     CashierShift[]
+  sales      Sale[]
+  expenses   Expense[]
+
+  @@index([organizationId])
+}
+
+model Warehouse {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  branchId  String   @db.VarChar(36)
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  name      String   @db.VarChar(191)
+  code      String   @unique @db.VarChar(64)
+  isPrimary Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inventoryBalances InventoryBalance[]
+  inventoryMovements InventoryMovement[]
+  sales             Sale[]
+  transfersFrom     WarehouseTransfer[] @relation("SourceWarehouse")
+  transfersTo       WarehouseTransfer[] @relation("DestinationWarehouse")
+
+  @@index([branchId])
+}
+
+model Register {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  branchId  String   @db.VarChar(36)
+  branch    Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  name      String   @db.VarChar(191)
+  code      String   @unique @db.VarChar(64)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shifts CashierShift[]
+  sales  Sale[]
+
+  @@index([branchId])
+}
+
+model User {
+  id             String       @id @default(uuid()) @db.VarChar(36)
+  organizationId String       @db.VarChar(36)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branchId       String?      @db.VarChar(36)
+  branch         Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  email          String       @unique @db.VarChar(191)
+  passwordHash   String       @db.VarChar(191)
+  name           String       @db.VarChar(191)
+  phone          String?      @db.VarChar(64)
+  role           RoleType     @default(CASHIER)
+  roles          String       @default("CASHIER") @db.VarChar(191) // Comma-separated roles e.g. "OWNER,ADMIN,CASHIER"
+  permissions    String       @default("pos,shifts") @db.VarChar(255) // Comma-separated permissions e.g. "pos,shifts,expenses"
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  shifts        CashierShift[]
+  cashMovements CashMovement[]
+  sales         Sale[]
+  auditLogs     AuditLog[]
+  expenses      Expense[]
+
+  @@index([organizationId])
+  @@index([branchId])
+}
+
+model Expense {
+  id             String       @id @default(uuid()) @db.VarChar(36)
+  organizationId String       @db.VarChar(36)
+  branchId       String?      @db.VarChar(36)
+  title          String       @db.VarChar(191)
+  amount         Float
+  category       String       @default("GENERAL") @db.VarChar(64) // RENT, UTILITIES, SALARIES, TRANSPORT, INVENTORY, MISC
+  notes          String?      @db.VarChar(255)
+  date           DateTime     @default(now())
+  createdById    String?      @db.VarChar(36)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  branch         Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  createdBy      User?        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([branchId])
+}
+
+model Category {
+  id             String       @id @default(uuid()) @db.VarChar(36)
+  organizationId String       @db.VarChar(36)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String       @db.VarChar(191)
+  description    String?      @db.Text
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  products Product[]
+
+  @@index([organizationId])
+}
+
+model Brand {
+  id             String       @id @default(uuid()) @db.VarChar(36)
+  organizationId String       @db.VarChar(36)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  name           String       @db.VarChar(191)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  products Product[]
+
+  @@index([organizationId])
+}
+
+model Product {
+  id             String       @id @default(uuid()) @db.VarChar(36)
+  organizationId String       @db.VarChar(36)
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  categoryId     String?      @db.VarChar(36)
+  category       Category?    @relation(fields: [categoryId], references: [id])
+  brandId        String?      @db.VarChar(36)
+  brand          Brand?       @relation(fields: [brandId], references: [id])
+  name           String       @db.VarChar(191)
+  description    String?      @db.Text
+  imageUrl       String?      @db.LongText
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  variants ProductVariant[]
+
+  @@index([organizationId])
+  @@index([categoryId])
+}
+
+model ProductVariant {
+  id            String   @id @default(uuid()) @db.VarChar(36)
+  productId     String   @db.VarChar(36)
+  product       Product  @relation(fields: [productId], references: [id])
+  variantName   String   @default("Default") @db.VarChar(191)
+  sku           String   @unique @db.VarChar(64)
+  barcode       String?  @unique @db.VarChar(64)
+  costPrice     Decimal  @db.Decimal(12, 4)
+  sellingPrice  Decimal  @db.Decimal(12, 4)
+  minStockLevel Decimal  @default(5.0000) @db.Decimal(12, 4)
+  reorderLevel  Decimal  @default(10.0000) @db.Decimal(12, 4)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  inventoryBalances  InventoryBalance[]
+  inventoryMovements InventoryMovement[]
+  saleItems          SaleItem[]
+  refundItems        RefundItem[]
+  transferItems      WarehouseTransferItem[]
+  discountRules      DiscountRule[]
+
+  @@index([productId])
+  @@index([barcode])
+  @@index([sku])
+}
+
+model DiscountRule {
+  id          String        @id @default(uuid()) @db.VarChar(36)
+  name        String        @db.VarChar(191)
+  type        DiscountType  @default(PERCENTAGE)
+  value       Decimal       @db.Decimal(12, 4) // Percentage or fixed currency amount
+  scope       DiscountScope @default(ALL_PRODUCTS)
+  variantId   String?       @db.VarChar(36)
+  variant     ProductVariant? @relation(fields: [variantId], references: [id])
+  startDate   DateTime?     // Null means permanent / general discount
+  endDate     DateTime?     // Null means permanent / no expiration
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([variantId])
+  @@index([isActive])
+}
+
+model InventoryBalance {
+  variantId   String    @db.VarChar(36)
+  variant     ProductVariant @relation(fields: [variantId], references: [id])
+  warehouseId String    @db.VarChar(36)
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  quantityOnHand Decimal @default(0.0000) @db.Decimal(12, 4)
+  updatedAt   DateTime  @updatedAt
+
+  @@id([variantId, warehouseId])
+  @@index([warehouseId])
+}
+
+model InventoryMovement {
+  id             String                @id @default(uuid()) @db.VarChar(36)
+  variantId      String                @db.VarChar(36)
+  variant        ProductVariant        @relation(fields: [variantId], references: [id])
+  warehouseId    String                @db.VarChar(36)
+  warehouse      Warehouse             @relation(fields: [warehouseId], references: [id])
+  type           InventoryMovementType
+  quantityChange Decimal               @db.Decimal(12, 4)
+  resultingQuantity Decimal            @db.Decimal(12, 4)
+  referenceId    String?               @db.VarChar(64)
+  notes          String?               @db.VarChar(255)
+  createdAt      DateTime              @default(now())
+
+  @@index([variantId])
+  @@index([warehouseId])
+  @@index([createdAt])
+}
+
+model CashierShift {
+  id                  String      @id @default(uuid()) @db.VarChar(36)
+  registerId          String      @db.VarChar(36)
+  register            Register?   @relation(fields: [registerId], references: [id])
+  userId              String      @db.VarChar(36)
+  user                User?       @relation(fields: [userId], references: [id])
+  branchId            String      @db.VarChar(36)
+  branch              Branch?     @relation(fields: [branchId], references: [id])
+  openingFloat        Decimal     @db.Decimal(12, 4)
+  expectedClosingCash Decimal?    @db.Decimal(12, 4)
+  actualClosingCash   Decimal?    @db.Decimal(12, 4)
+  varianceAmount      Decimal?    @db.Decimal(12, 4)
+  status              ShiftStatus @default(OPEN)
+  openedAt            DateTime    @default(now())
+  closedAt            DateTime?
+
+  cashMovements CashMovement[]
+  sales         Sale[]
+
+  @@index([registerId])
+  @@index([userId])
+  @@index([status])
+}
+
+model CashMovement {
+  id        String           @id @default(uuid()) @db.VarChar(36)
+  shiftId   String           @db.VarChar(36)
+  shift     CashierShift     @relation(fields: [shiftId], references: [id])
+  userId    String           @db.VarChar(36)
+  user      User             @relation(fields: [userId], references: [id])
+  type      CashMovementType
+  amount    Decimal          @db.Decimal(12, 4)
+  reason    String           @db.VarChar(255)
+  createdAt DateTime         @default(now())
+
+  @@index([shiftId])
+}
+
+model Customer {
+  id                 String   @id @default(uuid()) @db.VarChar(36)
+  customerNumber     String   @unique @db.VarChar(64)
+  name               String   @db.VarChar(191)
+  phone              String?  @db.VarChar(64)
+  email              String?  @db.VarChar(191)
+  address            String?  @db.VarChar(191)
+  outstandingBalance Decimal  @default(0.0000) @db.Decimal(12, 4)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  sales         Sale[]
+  ledgerEntries CustomerLedgerEntry[]
+
+  @@index([customerNumber])
+  @@index([phone])
+}
+
+model CustomerLedgerEntry {
+  id             String          @id @default(uuid()) @db.VarChar(36)
+  customerId     String          @db.VarChar(36)
+  customer       Customer        @relation(fields: [customerId], references: [id])
+  saleId         String?         @db.VarChar(36)
+  type           LedgerEntryType
+  debit          Decimal         @default(0.0000) @db.Decimal(12, 4)
+  credit         Decimal         @default(0.0000) @db.Decimal(12, 4)
+  runningBalance Decimal         @db.Decimal(12, 4)
+  notes          String?         @db.VarChar(255)
+  createdAt      DateTime        @default(now())
+
+  @@index([customerId])
+}
+
+model Sale {
+  id                String     @id @default(uuid()) @db.VarChar(36)
+  receiptNumber     String     @unique @db.VarChar(64)
+  branchId          String     @db.VarChar(36)
+  branch            Branch     @relation(fields: [branchId], references: [id])
+  warehouseId       String     @db.VarChar(36)
+  warehouse         Warehouse  @relation(fields: [warehouseId], references: [id])
+  registerId        String     @db.VarChar(36)
+  register          Register   @relation(fields: [registerId], references: [id])
+  shiftId           String     @db.VarChar(36)
+  shift             CashierShift @relation(fields: [shiftId], references: [id])
+  userId            String     @db.VarChar(36)
+  user              User       @relation(fields: [userId], references: [id])
+  customerId        String?    @db.VarChar(36)
+  customer          Customer?  @relation(fields: [customerId], references: [id])
+  currencyCode      String     @default("GHS") @db.VarChar(16)
+  subtotal          Decimal    @db.Decimal(12, 4)
+  itemDiscountTotal Decimal    @default(0.0000) @db.Decimal(12, 4)
+  saleDiscountTotal Decimal    @default(0.0000) @db.Decimal(12, 4)
+  taxTotal          Decimal    @default(0.0000) @db.Decimal(12, 4)
+  grandTotal        Decimal    @db.Decimal(12, 4)
+  amountPaid        Decimal    @db.Decimal(12, 4)
+  changeGiven       Decimal    @db.Decimal(12, 4)
+  status            SaleStatus @default(COMPLETED)
+  idempotencyKey    String     @unique @db.VarChar(191)
+  notes             String?    @db.VarChar(255)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  items    SaleItem[]
+  payments SalePayment[]
+  refunds  Refund[]
+
+  @@index([receiptNumber])
+  @@index([branchId])
+  @@index([createdAt])
+  @@index([idempotencyKey])
+}
+
+model SaleItem {
+  id             String         @id @default(uuid()) @db.VarChar(36)
+  saleId         String         @db.VarChar(36)
+  sale           Sale           @relation(fields: [saleId], references: [id])
+  variantId      String         @db.VarChar(36)
+  variant        ProductVariant @relation(fields: [variantId], references: [id])
+  quantity       Decimal        @db.Decimal(12, 4)
+  unitCost       Decimal        @db.Decimal(12, 4)
+  unitPrice      Decimal        @db.Decimal(12, 4)
+  discountAmount Decimal        @default(0.0000) @db.Decimal(12, 4)
+  taxAmount      Decimal        @default(0.0000) @db.Decimal(12, 4)
+  totalPrice     Decimal        @db.Decimal(12, 4)
+
+  refundItems RefundItem[]
+
+  @@index([saleId])
+  @@index([variantId])
+}
+
+model SalePayment {
+  id              String        @id @default(uuid()) @db.VarChar(36)
+  saleId          String        @db.VarChar(36)
+  sale            Sale          @relation(fields: [saleId], references: [id])
+  paymentMethod   PaymentMethod @default(CASH)
+  amount          Decimal       @db.Decimal(12, 4)
+  currencyCode    String        @default("GHS") @db.VarChar(16)
+  referenceNumber String?       @db.VarChar(64)
+  createdAt       DateTime      @default(now())
+
+  @@index([saleId])
+}
+
+model Refund {
+  id           String   @id @default(uuid()) @db.VarChar(36)
+  saleId       String   @db.VarChar(36)
+  sale         Sale     @relation(fields: [saleId], references: [id])
+  refundNumber String   @unique @db.VarChar(64)
+  totalAmount  Decimal  @db.Decimal(12, 4)
+  reason       String   @db.VarChar(255)
+  userId       String   @db.VarChar(36)
+  createdAt    DateTime @default(now())
+
+  items RefundItem[]
+
+  @@index([saleId])
+}
+
+model RefundItem {
+  id           String         @id @default(uuid()) @db.VarChar(36)
+  refundId     String         @db.VarChar(36)
+  refund       Refund         @relation(fields: [refundId], references: [id])
+  saleItemId   String         @db.VarChar(36)
+  saleItem     SaleItem       @relation(fields: [saleItemId], references: [id])
+  variantId    String         @db.VarChar(36)
+  variant      ProductVariant @relation(fields: [variantId], references: [id])
+  quantity     Decimal        @db.Decimal(12, 4)
+  refundAmount Decimal        @db.Decimal(12, 4)
+  isRestocked  Boolean        @default(true)
+
+  @@index([refundId])
+}
+
+model TaxRate {
+  id          String   @id @default(uuid()) @db.VarChar(36)
+  code        String   @unique @db.VarChar(32)
+  name        String   @db.VarChar(191)
+  ratePercent Decimal  @db.Decimal(5, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model Currency {
+  code               String   @id @db.VarChar(16)
+  name               String   @db.VarChar(64)
+  symbol             String   @db.VarChar(16)
+  exchangeRateToBase Decimal  @db.Decimal(10, 6)
+  isBaseCurrency     Boolean  @default(false)
+  updatedAt          DateTime @updatedAt
+}
+
+model WarehouseTransfer {
+  id                     String         @id @default(uuid()) @db.VarChar(36)
+  transferNumber         String         @unique @db.VarChar(64)
+  sourceWarehouseId      String         @db.VarChar(36)
+  sourceWarehouse        Warehouse      @relation("SourceWarehouse", fields: [sourceWarehouseId], references: [id])
+  destinationWarehouseId String         @db.VarChar(36)
+  destinationWarehouse   Warehouse      @relation("DestinationWarehouse", fields: [destinationWarehouseId], references: [id])
+  status                 TransferStatus @default(DRAFT)
+  requestedBy            String         @db.VarChar(36)
+  approvedBy             String?        @db.VarChar(36)
+  notes                  String?        @db.VarChar(255)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  items WarehouseTransferItem[]
+
+  @@index([transferNumber])
+}
+
+model WarehouseTransferItem {
+  id         String            @id @default(uuid()) @db.VarChar(36)
+  transferId String            @db.VarChar(36)
+  transfer   WarehouseTransfer @relation(fields: [transferId], references: [id])
+  variantId  String            @db.VarChar(36)
+  variant    ProductVariant    @relation(fields: [variantId], references: [id])
+  quantity   Decimal           @db.Decimal(12, 4)
+
+  @@index([transferId])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  userId    String?  @db.VarChar(36)
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String   @db.VarChar(191)
+  entity    String   @db.VarChar(191)
+  entityId  String?  @db.VarChar(36)
+  details   String?  @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}

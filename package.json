@@ -1,0 +1,28 @@
+{
+  "name": "ave-retail",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Ave — Retail Sales & Inventory Management System",
+  "workspaces": [
+    "backend/*",
+    "frontend/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -p \"[{name}]\" -n \"API,WEB\" -c \"teal.bold,cyan.bold\" \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:all": "npm run dev",
+    "dev:api": "npm --prefix backend/api run dev",
+    "dev:web": "npm --prefix frontend/web run dev",
+    "start": "npm run dev",
+    "build:api": "npm --prefix backend/api run build",
+    "build:web": "npm --prefix frontend/web run build",
+    "db:push": "npx prisma db push --schema=backend/prisma/schema.prisma",
+    "db:seed": "npx ts-node backend/prisma/seed.ts",
+    "db:generate": "npx prisma generate --schema=backend/prisma/schema.prisma"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "prisma": "^5.19.0",
+    "typescript": "^5.5.4"
+  }
+}

@@ -1,0 +1,66 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-main: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-card: #ffffff;
+    --bg-hover: #f1f5f9;
+    --border-main: #e2e8f0;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+    --text-nano: #94a3b8;
+  }
+
+  .dark {
+    --bg-main: #020617;
+    --bg-surface: #0f172a;
+    --bg-card: #0f172a;
+    --bg-hover: #1e293b;
+    --border-main: #1e293b;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-nano: #64748b;
+  }
+
+  body {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    font-family: 'Urbanist', sans-serif;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-main);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-main);
+  border-radius: 4px;
+}
+
+/* Thermal Printable CSS */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #thermal-receipt-print, #thermal-receipt-print * {
+    visibility: visible;
+  }
+  #thermal-receipt-print {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    color: #000;
+    background: #fff;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+  }
+}
