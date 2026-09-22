@@ -80,4 +80,18 @@ export class CatalogController {
       res.status(400).json({ success: false, error: err.message });
     }
   }
+
+  // Update Product Details & Promotional Discount Rules
+  static async updateProduct(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const result = await CatalogService.updateProduct(id, req.body);
+      
+      broadcastStockUpdated(result);
+
+      res.json({ success: true, data: result });
+    } catch (err: any) {
+      res.status(400).json({ success: false, error: err.message });
+    }
+  }
 }

@@ -15,15 +15,30 @@ export interface TaxBreakdown {
   taxAmount: number;
 }
 
-export function calculateTaxes(taxableAmount: number, taxRates: Array<{ code: string; name: string; ratePercent: number }>): {
+export function calculateTaxes(
+  taxableAmount: number,
+  taxRates: Array<{ code: string; name: string; ratePercent: number }>,
+  taxPayer: 'CUSTOMER' | 'BUSINESS' = 'CUSTOMER'
+): {
   totalTax: number;
   breakdown: TaxBreakdown[];
 } {
   let totalTax = 0;
   const breakdown: TaxBreakdown[] = [];
 
+  const totalRatePercent = taxRates.reduce((sum, t) => sum + (t.ratePercent || 0), 0);
+
   for (const tax of taxRates) {
-    const taxAmount = roundCurrency(taxableAmount * (tax.ratePercent / 100));
+    let taxAmount = 0;
+    if (taxPayer === 'BUSINESS') {
+      // Business Covers Tax: Tax is absorbed/included in the selling price
+      const factor = totalRatePercent > 0 ? (tax.ratePercent / (100 + totalRatePercent)) : 0;
+      taxAmount = roundCurrency(taxableAmount * factor);
+    } else {
+      // Customer Pays Tax: Tax is added on top of the selling price
+      taxAmount = roundCurrency(taxableAmount * (tax.ratePercent / 100));
+    }
+
     totalTax += taxAmount;
     breakdown.push({
       code: tax.code,
@@ -42,7 +57,8 @@ export function calculateTaxes(taxableAmount: number, taxRates: Array<{ code: st
 export function calculateCartTotals(
   items: Array<{ unitPrice: number; quantity: number; discountAmount: number }>,
   orderDiscountAmount: number = 0,
-  taxRates: Array<{ code: string; name: string; ratePercent: number }> = []
+  taxRates: Array<{ code: string; name: string; ratePercent: number }> = [],
+  taxPayer: 'CUSTOMER' | 'BUSINESS' = 'CUSTOMER'
 ) {
   let subtotal = 0;
   let itemDiscountTotal = 0;
@@ -57,8 +73,13 @@ export function calculateCartTotals(
   itemDiscountTotal = roundCurrency(itemDiscountTotal);
 
   const taxableAmount = roundCurrency(Math.max(0, subtotal - itemDiscountTotal - orderDiscountAmount));
-  const { totalTax, breakdown: taxBreakdown } = calculateTaxes(taxableAmount, taxRates);
-  const grandTotal = roundCurrency(taxableAmount + totalTax);
+  const { totalTax, breakdown: taxBreakdown } = calculateTaxes(taxableAmount, taxRates, taxPayer);
+
+  // If CUSTOMER pays tax -> Grand Total = Taxable Amount + Tax
+  // If BUSINESS covers tax -> Grand Total = Taxable Amount (Customer pays item price only)
+  const grandTotal = taxPayer === 'BUSINESS'
+    ? taxableAmount
+    : roundCurrency(taxableAmount + totalTax);
 
   return {
     subtotal,
@@ -66,7 +87,8 @@ export function calculateCartTotals(
     saleDiscountTotal: roundCurrency(orderDiscountAmount),
     taxTotal: totalTax,
     taxBreakdown,
-    grandTotal
+    grandTotal,
+    taxPayer
   };
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Plus, Trash2, Calendar, FileText, Filter, Tag, Building } from 'lucide-react';
+import { DollarSign, Plus, Trash2, Calendar, FileText, Filter, Tag, Building, Edit } from 'lucide-react';
 import { ApiClient } from '../../lib/api';
 import { useAlertStore } from '../../store/alertStore';
 import { useAuthStore } from '../../store/authStore';
@@ -29,6 +29,14 @@ export const ExpenseView: React.FC = () => {
   const [category, setCategory] = useState('UTILITIES');
   const [notes, setNotes] = useState('');
   const [selectedBranchId, setSelectedBranchId] = useState('');
+
+  // Edit Expense State (CRUD Option 4)
+  const [editModalOpen, setEditModalOpen] = useState<boolean>(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editAmount, setEditAmount] = useState('');
+  const [editCategory, setEditCategory] = useState('UTILITIES');
+  const [editNotes, setEditNotes] = useState('');
 
   const { showToast } = useAlertStore();
   const { currentBranch, branches } = useAuthStore();
@@ -78,6 +86,44 @@ export const ExpenseView: React.FC = () => {
       }
     } catch (err: any) {
       showToast('error', 'Error Recording Expense', err.message);
+    }
+  };
+
+  const handleOpenEditExpense = (exp: ExpenseItem) => {
+    setEditingExpenseId(exp.id);
+    setEditTitle(exp.title);
+    setEditAmount(String(exp.amount));
+    setEditCategory(exp.category);
+    setEditNotes(exp.notes || '');
+    setEditModalOpen(true);
+  };
+
+  const handleUpdateExpense = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExpenseId || !editTitle || !editAmount) return;
+    try {
+      const res = await ApiClient.request(`/expenses/${editingExpenseId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          title: editTitle,
+          amount: parseFloat(editAmount),
+          category: editCategory,
+          notes: editNotes
+        })
+      });
+      if (res.success) {
+        showToast('success', 'Expense Updated', `Updated '${editTitle}'.`);
+        setExpenses(expenses.map(e => e.id === editingExpenseId ? {
+          ...e,
+          title: editTitle,
+          amount: parseFloat(editAmount),
+          category: editCategory,
+          notes: editNotes
+        } : e));
+        setEditModalOpen(false);
+      }
+    } catch (err: any) {
+      showToast('error', 'Update Failed', err.message);
     }
   };
 
@@ -217,13 +263,22 @@ export const ExpenseView: React.FC = () => {
                       {exp.createdBy?.name || 'Admin'}
                     </td>
                     <td className="p-3 text-right">
-                      <button
-                        onClick={() => handleDeleteExpense(exp.id, exp.title)}
-                        className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                        title="Delete expense entry"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end space-x-1">
+                        <button
+                          onClick={() => handleOpenEditExpense(exp)}
+                          className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                          title="Edit expense entry"
+                        >
+                          <Edit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteExpense(exp.id, exp.title)}
+                          className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                          title="Delete expense entry"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -339,6 +394,103 @@ export const ExpenseView: React.FC = () => {
                   className="w-2/3 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-lg shadow-amber-600/30 text-xs"
                 >
                   Save Expense
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Expense Modal */}
+      {editModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                <Edit className="w-5 h-5 text-amber-500" />
+                <span>Edit Store Expense Entry</span>
+              </h3>
+              <button
+                onClick={() => setEditModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateExpense} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                  Expense Title / Description *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Amount (GH₵) *
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <CustomSelect
+                    label="Category"
+                    options={[
+                      { value: 'UTILITIES', label: 'UTILITIES' },
+                      { value: 'RENT', label: 'RENT' },
+                      { value: 'SALARIES', label: 'SALARIES' },
+                      { value: 'TRANSPORT', label: 'TRANSPORT' },
+                      { value: 'FREIGHT', label: 'FREIGHT' },
+                      { value: 'PACKAGING', label: 'PACKAGING' },
+                      { value: 'MISC', label: 'MISC' }
+                    ]}
+                    value={editCategory}
+                    onChange={(val) => setEditCategory(val)}
+                    icon={Tag}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                  Notes / Receipt Reference
+                </label>
+                <textarea
+                  rows={2}
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="w-1/3 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold rounded-xl text-xs cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="w-2/3 py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-lg shadow-amber-600/30 text-xs cursor-pointer"
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

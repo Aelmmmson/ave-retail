@@ -10,4 +10,5 @@ catalogRouter.get('/currencies', CatalogController.getCurrencies);
 
 catalogRouter.use(authMiddleware);
 catalogRouter.post('/products', CatalogController.createProduct);
+catalogRouter.put('/products/:id', CatalogController.updateProduct);
 catalogRouter.post('/stock-adjust', CatalogController.adjustStock);

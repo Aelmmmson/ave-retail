@@ -4,6 +4,76 @@ All notable changes to the **Ave — Retail Sales & Inventory Management System*
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-09-20
+
+### Added
+- **Critical Security Audit & Inventory Concurrency Hardening (`salesService.ts`, `schema.prisma`)**:
+  - Implemented atomic database inventory decrements during checkout sales to prevent race conditions and stock drift.
+  - Added Manager PIN authorization enforcement for cashier shift reconciliations with cash drawer variances (`shiftService.ts`, `ShiftView.tsx`).
+  - Updated `DiscountRule` schema with lossless `metadata` JSON field for promo parameters.
+- **Customizable Thermal Receipt Builder & ESC/POS Preview (`ReceiptBuilderModal.tsx`, `Header.tsx`)**:
+  - Built interactive thermal receipt builder with live receipt ticket preview, 58mm/80mm layout toggle, custom header/footer policy notes, and ESC/POS print/cash drawer pulse triggers.
+- **Compliance Audit Log Explorer (`AuditView.tsx`, `auditController.ts`, `auditRoutes.ts`, `Sidebar.tsx`)**:
+  - Added dedicated Admin & Compliance Audit Trail view registered in the sidebar with live action search, severity filtering, and user event logging.
+- **4-Stage Warehouse Stock Transfer Workflow (`transferService.ts`, `transferController.ts`, `WarehouseTransferView.tsx`)**:
+  - Implemented full stock transfer lifecycle (`REQUESTED` ➔ `APPROVED` ➔ `DISPATCHED` ➔ `RECEIVED` / `CANCELLED`) with automatic stock movement on dispatch and receipt.
+- **Customer Loyalty Points & Store Credit System (`salesService.ts`, `CustomerView.tsx`, `PosView.tsx`)**:
+  - Integrated automatic earning and redemption of customer loyalty points, store credit balance management, and manual debt ledger adjustments.
+- **System-Designed Applied Discounts Modal & `+N Deals` Pill (`ProductDiscountsModal.tsx`, `PromoBadgeList.tsx`)**:
+  - Built custom system-designed UI popover modal for product discounts, replacing native browser tooltips. Added `+N Deals` pill button when products have multiple active promo rules.
+- **Stacked Promotional Rule Evaluation Engine & Day-of-Week Subset Support (`cartStore.ts`, `catalogService.ts`)**:
+  - Implemented day-of-week aware BOGO auto-add (e.g., adding 1 Coke on Monday under a Monday/Sunday BOGO Buy 1 Get 2 Free campaign automatically expands cart to 3 items with 2 free).
+  - Stacks percentage/fixed discounts on paid units while 100% discounting BOGO free units (e.g., 3 Cokes = 2 BOGO Free + 1% OFF on 1 paid unit = GH₵ 12.06 total discount).
+
+## [1.9.3] - 2026-09-20
+
+### Added
+- **Interactive Navbar Currency Switcher & Rate Quick-Manager (`Header.tsx`)**:
+  - Transformed navbar base currency pill into an interactive dropdown for switching active store currency and managing live exchange rates.
+- **Advanced Catalog Promotional Discount Engine & Day-of-Week Schedule (`InventoryView.tsx`, `cartStore.ts`)**:
+  - Integrated Days of the Week selection (e.g. Tuesday-only BOGO sales), Target Price to % Off Auto-Calculator, and refined dynamic BOGO calculation formula.
+- **POS Product Card Promo Badges & System Tooltips (`PosView.tsx`, `InventoryView.tsx`)**:
+  - Added promo tags on POS catalog item cards and system-designed custom tooltips explaining promo conditions in product management.
+- **Order-Level General Discount Modal (`PosView.tsx`)**:
+  - Added dedicated Order Discount button and modal in POS cart panel for applying fixed or percentage discounts to the entire cart.
+- **Multi-Currency Product Intake & Real-Time Rate Alerts (`InventoryView.tsx`)**:
+  - Added cost vs selling currency selectors and automatic exchange rate alert banners during product intake.
+- **Dynamic Financial Report Currency Converter & Temp Rate Selector (`ReportView.tsx`)**:
+  - Enabled dynamic multi-currency conversion on Financial Reports & Accounting Ledger with custom temporary exchange rates.
+- **Refined Store Credit Checkout & Dynamic Unclaimed Change Buttons (`PosView.tsx`)**:
+  - Removed duplicate customer debt banner and dynamically disabled 0.00 unclaimed change buttons.
+
+## [1.9.2] - 2026-09-19
+
+### Added
+- **Default Checkout POS Launch on User Login (`App.tsx`)**:
+  - Automatically routes users directly to the POS Checkout Register screen immediately upon authentication.
+- **Clickable Low-Stock Notifications with Quick Stock Adjustment (`Header.tsx`, `InventoryView.tsx`)**:
+  - Made low-stock warning items clickable in the top notification popover, navigating directly to Inventory and automatically opening the Stock Adjustment modal pre-selected for that item.
+- **Inter-Warehouse Transfer Line Item Builder & Backend API (`transferController.ts`, `transferRoutes.ts`, `WarehouseTransferView.tsx`)**:
+  - Implemented product line item selector with quantity controls in the transfer creation modal and created backend `/transfers` Express API endpoints.
+- **Inline Tax & Multi-Currency Exchange Rate Editor (`ProfileView.tsx`)**:
+  - Added inline Edit mode for configured tax rates and currency exchange rates without requiring deletion.
+- **Multi-Step Business Profile Settings Wizard (`UserManagementView.tsx`)**:
+  - Redesigned the business profile editor into a spacious 3-Step Wizard Modal with step progress indicators.
+- **Custom System UI Dropdowns (`CustomSelect.tsx`)**:
+  - Replaced native browser select inputs across transfer, customer debt ledger, and shift modals with custom-designed system UI dropdown components.
+
+## [1.9.1] - 2026-09-19
+
+### Added
+- **Official Business Website Integration (`schema.prisma`, `authController.ts`, `AuthModalView.tsx`, `UserManagementView.tsx`, `printerDriver.ts`)**:
+  - Added `website` field to Prisma `Organization` schema, signup endpoints, business management modals, enterprise profile headers, and thermal receipts.
+- **Show/Hide Password Toggle Controls (`AuthModalView.tsx`, `UserManagementView.tsx`, `ProfileView.tsx`)**:
+  - Integrated interactive `Eye` and `EyeOff` toggle icons across all password input fields in Login, Business Signup, Staff Account Creation, and User Profile Security forms.
+
+### Fixed
+- **Payload Too Large Signup Error (`server.ts` & `AuthModalView.tsx`)**:
+  - Resolved `500 Internal Server Error (request entity too large)` by increasing Express body parser payload limits (`express.json({ limit: '50mb' })` and `express.urlencoded({ limit: '50mb', extended: true })`) in `server.ts`.
+  - Added HTML5 canvas auto-compression for uploaded business logo image files prior to Base64 encoding.
+
+---
+
 ## [1.9.0] - 2026-09-17
 
 ### Added

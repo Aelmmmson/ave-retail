@@ -169,12 +169,15 @@ npm run dev
 npm run dev:all
 ```
 
-#### Individual Service Commands (Optional)
-If you prefer running services in separate terminal windows:
-- **Backend API (Port 4890)**: `npm run dev:api`
-- **Web Frontend (Port 5173)**: `npm run dev:web`
+#### Service URLs Summary
 
-Open [`http://localhost:5173`](http://localhost:5173) in your browser.
+| Service | Primary Access URL | Description |
+| :--- | :--- | :--- |
+| **Web SPA Application** | [http://localhost:5173](http://localhost:5173) (or [http://localhost:5175](http://localhost:5175)) | Main React + Vite web frontend |
+| **Backend API Server** | [http://localhost:4890](http://localhost:4890) | Express REST API server root |
+| **API Base Route** | [http://localhost:4890/api/v1](http://localhost:4890/api/v1) | v1 REST API endpoint base |
+| **Server Health Check** | [http://localhost:4890/health](http://localhost:4890/health) | API health & uptime ping |
+| **Real-Time WebSockets** | [ws://localhost:4890](ws://localhost:4890) | Socket.io real-time event engine |
 
 ---
 
@@ -192,91 +195,101 @@ Once the database is seeded, log in using the following accounts:
 
 ## 📍 System Web Routes & Application Pages Directory
 
-The Web Application (`http://localhost:5173`) features modular role-based navigation with the following application pages:
+The Web Application features modular role-based navigation with the following direct application URLs:
 
-| Page / Navigation Link | Internal ID | Description | Authorized Access |
+| Page / Navigation Link | View Route URL | Description | Authorized Access |
 | :--- | :--- | :--- | :--- |
-| **Home / Overview** | `landing` | High-level enterprise dashboard showing real-time sales metrics, quick shortcuts, active shift status, and system status | All Roles |
-| **POS Checkout** | `pos` | High-speed POS register terminal supporting barcode scanning, cart calculations, customer credit sales, and thermal receipt printing | Owner, Admin, Manager, Supervisor, Cashier |
-| **Cashier Shifts** | `shifts` | Shift lifecycle management for float opening, cash movements (CASH_IN/OUT), shift closure, and drawer reconciliation | Owner, Admin, Manager, Supervisor, Cashier |
-| **Products & Stock** | `inventory` | Catalog management for product SKUs, barcodes, cost/selling prices, low-stock reorder alerts, and stock intake/damage adjustments | Owner, Admin, Manager, Supervisor, Inventory Officer |
-| **Customer Debt Ledger** | `customers` | Store credit account ledger tracking customer debt balances, credit sales history, and debt repayments | Owner, Admin, Manager, Supervisor, Cashier, Accountant |
-| **Store Expenses** | `expenses` | Overhead cost tracking for logging rent, utility bills, salaries, packaging, and freight for accurate operating profit calculations | Owner, Admin, Manager, Accountant |
-| **Reports & Analytics** | `reports` | Financial statements, net operating profit, tax liabilities, payment method breakdown, and multi-branch performance comparison tables | Owner, Admin, Manager, Supervisor, Accountant |
-| **My Account Profile** | `profile` | User identity view displaying user details, assigned RBAC roles, enterprise information, security credentials, and module permissions | All Authenticated Users |
-| **Staff & Branch Admin** | `admin` | Enterprise administration for managing staff user accounts, editing staff permissions, transferring staff between store branches, adding store outlets, and updating business profile branding | Owner, Admin |
+| **Home / Overview** | [http://localhost:5173/?view=landing](http://localhost:5173/?view=landing) | High-level enterprise dashboard showing real-time sales metrics, quick shortcuts, active shift status, and system status | All Roles |
+| **POS Checkout** | [http://localhost:5173/?view=pos](http://localhost:5173/?view=pos) | High-speed POS register terminal supporting barcode scanning, cart calculations, customer credit sales, and thermal receipt printing | Owner, Admin, Manager, Supervisor, Cashier |
+| **Cashier Shifts** | [http://localhost:5173/?view=shifts](http://localhost:5173/?view=shifts) | Shift lifecycle management for float opening, cash movements (CASH_IN/OUT), shift closure, and drawer reconciliation | Owner, Admin, Manager, Supervisor, Cashier |
+| **Products & Stock** | [http://localhost:5173/?view=inventory](http://localhost:5173/?view=inventory) | Catalog management for product SKUs, barcodes, sizes, types, flavours, categories, low-stock alerts, and stock intake | Owner, Admin, Manager, Supervisor, Inventory Officer |
+| **Inter-Warehouse Transfers** | [http://localhost:5173/?view=transfers](http://localhost:5173/?view=transfers) | Multi-item bulk stock manifest dispatch, inter-warehouse transfer tracking, and batch manifest history log | Owner, Admin, Manager, Supervisor, Inventory Officer |
+| **Customer Debt Ledger** | [http://localhost:5173/?view=customers](http://localhost:5173/?view=customers) | Store credit account ledger tracking customer debt balances, credit sales history, loyalty points, and repayments | Owner, Admin, Manager, Supervisor, Cashier, Accountant |
+| **Store Expenses** | [http://localhost:5173/?view=expenses](http://localhost:5173/?view=expenses) | Overhead cost tracking for logging rent, utility bills, salaries, packaging, and freight for operating profit calculations | Owner, Admin, Manager, Accountant |
+| **Financial Reports** | [http://localhost:5173/?view=reports](http://localhost:5173/?view=reports) | Financial statements, period duration filters, B/F & C/F ledger statements, tax liabilities, and per-branch comparisons | Owner, Admin, Manager, Supervisor, Accountant |
+| **My Account Profile** | [http://localhost:5173/?view=profile](http://localhost:5173/?view=profile) | Profile details, RBAC roles, enterprise settings, tax & multi-currency exchange rate presets, and security credentials | All Authenticated Users |
+| **Staff & Branch Admin** | [http://localhost:5173/?view=admin](http://localhost:5173/?view=admin) | Enterprise administration for staff accounts, permission switches (transfers, tax, brands, loyalty), store branches, and branding | Owner, Admin |
 
 ---
 
 ## 🌐 API Endpoint & Real-Time Routes Reference
 
-Below is a complete list of all Express REST API endpoints and Socket.io WebSocket events provided by the backend service (`http://localhost:4890/api/v1`):
+Below is a complete list of all Express REST API endpoints and Socket.io WebSocket events provided by the backend service ([http://localhost:4890/api/v1](http://localhost:4890/api/v1)):
 
-### 🔐 Authentication & Staff Administration (`/api/v1/auth`)
+### 🔐 Authentication & Staff Administration ([`http://localhost:4890/api/v1/auth`](http://localhost:4890/api/v1/auth))
 
-| Method | Endpoint | Description |
+| Method | Endpoint URL | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/v1/auth/signup` | Registers a new business enterprise, main store branch, primary warehouse, and owner account |
-| `POST` | `/api/v1/auth/login` | Authenticates staff credentials, returning user profile, JWT token, branch context, and permission switches |
-| `GET` | `/api/v1/auth/profile` | Fetches the current authenticated user's profile details, assigned roles, and module access rights |
-| `PATCH` | `/api/v1/auth/profile` | Updates authenticated user's personal profile (full name, phone number) or updates password |
-| `GET` | `/api/v1/auth/users` | Retrieves list of all staff accounts registered under the business enterprise |
-| `POST` | `/api/v1/auth/users` | Creates a new staff member account (Cashier, Manager, Supervisor) with role presets and permissions |
-| `PATCH` | `/api/v1/auth/users/:id` | Updates a staff member's name, phone, branch assignment, role presets, permission switches, or active status |
-| `DELETE` | `/api/v1/auth/users/:id` | Permanently deletes a staff member account from the enterprise system |
-| `GET` | `/api/v1/auth/branches` | Retrieves list of all registered retail store branches for the business |
-| `POST` | `/api/v1/auth/branches` | Creates a new store branch outlet location |
-| `PATCH` | `/api/v1/auth/branches/:id` | Updates branch details (name, phone, address) |
-| `PATCH` | `/api/v1/auth/business` | Updates business profile (name, tagline, TIN, phone, address, logo, active/inactive status) |
-| `DELETE` | `/api/v1/auth/business` | Performs a cascading purge of the business enterprise and all associated records |
+| `POST` | [http://localhost:4890/api/v1/auth/signup](http://localhost:4890/api/v1/auth/signup) | Registers a new business enterprise, main store branch, primary warehouse, and owner account |
+| `POST` | [http://localhost:4890/api/v1/auth/login](http://localhost:4890/api/v1/auth/login) | Authenticates staff credentials, returning user profile, JWT token, branch context, and permission switches |
+| `GET` | [http://localhost:4890/api/v1/auth/profile](http://localhost:4890/api/v1/auth/profile) | Fetches the current authenticated user's profile details, assigned roles, and module access rights |
+| `PATCH` | [http://localhost:4890/api/v1/auth/profile](http://localhost:4890/api/v1/auth/profile) | Updates authenticated user's personal profile (full name, phone number) or updates password |
+| `GET` | [http://localhost:4890/api/v1/auth/users](http://localhost:4890/api/v1/auth/users) | Retrieves list of all staff accounts registered under the business enterprise |
+| `POST` | [http://localhost:4890/api/v1/auth/users](http://localhost:4890/api/v1/auth/users) | Creates a new staff member account (Cashier, Manager, Supervisor) with role presets and permissions |
+| `PATCH` | [http://localhost:4890/api/v1/auth/users/:id](http://localhost:4890/api/v1/auth/users/:id) | Updates staff member's name, phone, branch assignment, role presets, permission switches, or active status |
+| `DELETE` | [http://localhost:4890/api/v1/auth/users/:id](http://localhost:4890/api/v1/auth/users/:id) | Permanently deletes a staff member account from the enterprise system |
+| `GET` | [http://localhost:4890/api/v1/auth/branches](http://localhost:4890/api/v1/auth/branches) | Retrieves list of all registered retail store branches for the business |
+| `POST` | [http://localhost:4890/api/v1/auth/branches](http://localhost:4890/api/v1/auth/branches) | Creates a new store branch outlet location |
+| `PATCH` | [http://localhost:4890/api/v1/auth/branches/:id](http://localhost:4890/api/v1/auth/branches/:id) | Updates branch details (name, phone, address) |
+| `PATCH` | [http://localhost:4890/api/v1/auth/business](http://localhost:4890/api/v1/auth/business) | Updates business profile (name, tagline, TIN, phone, address, logo, active/inactive status) |
+| `DELETE` | [http://localhost:4890/api/v1/auth/business](http://localhost:4890/api/v1/auth/business) | Performs a cascading purge of the business enterprise and all associated records |
 
-### 📦 Product Catalog & Stock Inventory (`/api/v1/catalog`)
+### 📦 Product Catalog & Stock Inventory ([`http://localhost:4890/api/v1/catalog`](http://localhost:4890/api/v1/catalog))
 
-| Method | Endpoint | Description |
+| Method | Endpoint URL | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/v1/catalog/products` | Retrieves product catalog with SKUs, barcodes, categories, prices, and stock balances (supports `?query=`) |
-| `POST` | `/api/v1/catalog/products` | Creates a new product and variant record |
-| `POST` | `/api/v1/catalog/stock-adjust` | Logs stock inventory adjustments (stock-in, damage, correction, transfer) |
+| `GET` | [http://localhost:4890/api/v1/catalog/products](http://localhost:4890/api/v1/catalog/products) | Retrieves product catalog with SKUs, barcodes, categories, sizes, types, prices, and stock balances |
+| `POST` | [http://localhost:4890/api/v1/catalog/products](http://localhost:4890/api/v1/catalog/products) | Creates a new product and variant record with categories, sizes, types, and brand |
+| `POST` | [http://localhost:4890/api/v1/catalog/stock-adjust](http://localhost:4890/api/v1/catalog/stock-adjust) | Logs stock inventory adjustments (stock-in, damage, correction, transfer) |
 
-### 🛒 Sales & POS Register Checkout (`/api/v1/sales`)
+### 🚚 Inter-Warehouse Stock Transfers ([`http://localhost:4890/api/v1/transfers`](http://localhost:4890/api/v1/transfers))
 
-| Method | Endpoint | Description |
+| Method | Endpoint URL | Description |
 | :--- | :--- | :--- |
-| `POST` | `/api/v1/sales` | Processes a POS checkout transaction with sub-unit decimal math, tax calculation, and idempotency check |
-| `GET` | `/api/v1/sales` | Retrieves historical sales transactions list with receipt details |
+| `GET` | [http://localhost:4890/api/v1/transfers](http://localhost:4890/api/v1/transfers) | Lists all inter-warehouse stock transfers and historical manifests |
+| `POST` | [http://localhost:4890/api/v1/transfers](http://localhost:4890/api/v1/transfers) | Submits a multi-item bulk stock transfer manifest to target branches |
+| `GET` | [http://localhost:4890/api/v1/transfers/:id](http://localhost:4890/api/v1/transfers/:id) | Retrieves detailed line-item batch manifest for a transfer |
+| `PATCH` | [http://localhost:4890/api/v1/transfers/:id/status](http://localhost:4890/api/v1/transfers/:id/status) | Updates status of a transfer manifest (APPROVED, DISPATCHED, RECEIVED, CANCELLED) |
 
-### ⏱️ Cashier Shifts & Till Drawer (`/api/v1/shifts`)
+### 🛒 Sales & POS Register Checkout ([`http://localhost:4890/api/v1/sales`](http://localhost:4890/api/v1/sales))
 
-| Method | Endpoint | Description |
+| Method | Endpoint URL | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/v1/shifts/active` | Retrieves the active open cashier shift for a register terminal |
-| `POST` | `/api/v1/shifts/open` | Opens a new cashier shift with an initial cash float amount |
-| `POST` | `/api/v1/shifts/close` | Closes a cashier shift, logging actual cash in drawer and calculating variance |
-| `POST` | `/api/v1/shifts/movement` | Logs non-sale cash movements (`CASH_IN` / `CASH_OUT`) for petty cash or float additions |
+| `POST` | [http://localhost:4890/api/v1/sales](http://localhost:4890/api/v1/sales) | Processes a POS checkout transaction with decimal math, tax calculation, and idempotency check |
+| `GET` | [http://localhost:4890/api/v1/sales](http://localhost:4890/api/v1/sales) | Retrieves historical sales transactions list with receipt details |
 
-### 👥 Customer Debt Ledger (`/api/v1/customers`)
+### ⏱️ Cashier Shifts & Till Drawer ([`http://localhost:4890/api/v1/shifts`](http://localhost:4890/api/v1/shifts))
 
-| Method | Endpoint | Description |
+| Method | Endpoint URL | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/v1/customers` | Retrieves customer directory with current outstanding store credit balances |
-| `POST` | `/api/v1/customers` | Creates a new customer account |
-| `POST` | `/api/v1/customers/payment` | Logs a debt repayment or credit note entry against a customer ledger |
+| `GET` | [http://localhost:4890/api/v1/shifts/active](http://localhost:4890/api/v1/shifts/active) | Retrieves the active open cashier shift for a register terminal |
+| `POST` | [http://localhost:4890/api/v1/shifts/open](http://localhost:4890/api/v1/shifts/open) | Opens a new cashier shift with an initial cash float amount |
+| `POST` | [http://localhost:4890/api/v1/shifts/close](http://localhost:4890/api/v1/shifts/close) | Closes a cashier shift, logging actual cash in drawer and calculating variance |
+| `POST` | [http://localhost:4890/api/v1/shifts/movement](http://localhost:4890/api/v1/shifts/movement) | Logs non-sale cash movements (`CASH_IN` / `CASH_OUT`) for petty cash or float additions |
 
-### 💵 Store Operating Expenses (`/api/v1/expenses`)
+### 👥 Customer Debt Ledger ([`http://localhost:4890/api/v1/customers`](http://localhost:4890/api/v1/customers))
 
-| Method | Endpoint | Description |
+| Method | Endpoint URL | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/v1/expenses` | Retrieves logged store operating expenses (rent, utilities, salaries, transport) |
-| `POST` | `/api/v1/expenses` | Logs a new store operating expense entry |
-| `DELETE` | `/api/v1/expenses/:id` | Deletes an expense entry |
+| `GET` | [http://localhost:4890/api/v1/customers](http://localhost:4890/api/v1/customers) | Retrieves customer directory with current outstanding store credit balances |
+| `POST` | [http://localhost:4890/api/v1/customers](http://localhost:4890/api/v1/customers) | Creates a new customer account |
+| `POST` | [http://localhost:4890/api/v1/customers/payment](http://localhost:4890/api/v1/customers/payment) | Logs a debt repayment or credit note entry against a customer ledger |
 
-### 📊 Financial Reports & Analytics (`/api/v1/reports`)
+### 💵 Store Operating Expenses ([`http://localhost:4890/api/v1/expenses`](http://localhost:4890/api/v1/expenses))
 
-| Method | Endpoint | Description |
+| Method | Endpoint URL | Description |
 | :--- | :--- | :--- |
-| `GET` | `/api/v1/reports/summary` | Returns gross revenue, net sales, tax liabilities, expenses, net operating profit, and per-branch comparisons (`?branchId=all` or `?branchId=xxx`) |
+| `GET` | [http://localhost:4890/api/v1/expenses](http://localhost:4890/api/v1/expenses) | Retrieves logged store operating expenses (rent, utilities, salaries, transport) |
+| `POST` | [http://localhost:4890/api/v1/expenses](http://localhost:4890/api/v1/expenses) | Logs a new store operating expense entry |
+| `DELETE` | [http://localhost:4890/api/v1/expenses/:id](http://localhost:4890/api/v1/expenses/:id) | Deletes an expense entry |
 
-### ⚡ Real-Time WebSocket Channel Events (`socket.io`)
+### 📊 Financial Reports & Analytics ([`http://localhost:4890/api/v1/reports`](http://localhost:4890/api/v1/reports))
+
+| Method | Endpoint URL | Description |
+| :--- | :--- | :--- |
+| `GET` | [http://localhost:4890/api/v1/reports/summary](http://localhost:4890/api/v1/reports/summary) | Returns gross revenue, net sales, tax liabilities, expenses, B/F & C/F balances, and per-branch comparisons |
+
+### ⚡ Real-Time WebSocket Channel Events (`ws://localhost:4890`)
 
 | Channel Event | Event Description |
 | :--- | :--- |

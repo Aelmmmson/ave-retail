@@ -6,7 +6,7 @@ export class AuthController {
   // Business Registration (Sign-Up)
   static async signup(req: Request, res: Response) {
     try {
-      const { businessName, adminName, email, password, phone, address, tagline, taxNumber, logoUrl } = req.body;
+      const { businessName, adminName, email, password, phone, address, tagline, taxNumber, website, logoUrl } = req.body;
 
       if (!businessName || !adminName || !email || !password) {
         return res.status(400).json({ success: false, error: 'Business name, admin name, email and password are required.' });
@@ -32,7 +32,7 @@ export class AuthController {
             address: address || null,
             logoUrl: logoUrl || null,
             status: 'ACTIVE'
-          }
+          } as any
         });
 
         // 2. Create Initial Branch
@@ -107,6 +107,8 @@ export class AuthController {
             taxNumber: result.org.taxNumber,
             phone: result.org.phone,
             address: result.org.address,
+            website: (result.org as any).website,
+            logoUrl: result.org.logoUrl,
             branches: [{ id: result.branch.id, name: result.branch.name, code: result.branch.code }]
           }
         }
@@ -158,6 +160,8 @@ export class AuthController {
             taxNumber: user.organization.taxNumber,
             phone: user.organization.phone || user.branch?.phone,
             address: user.organization.address || user.branch?.address,
+            website: (user.organization as any).website,
+            logoUrl: user.organization.logoUrl,
             status: user.organization.status,
             branches: user.organization.branches.map(b => ({ id: b.id, name: b.name, code: b.code }))
           },
@@ -394,7 +398,7 @@ export class AuthController {
   // Update Business Settings
   static async updateBusiness(req: AuthenticatedRequest, res: Response) {
     try {
-      const { name, tagline, taxNumber, phone, address, logoUrl, status } = req.body;
+      const { name, tagline, taxNumber, phone, address, website, logoUrl, status } = req.body;
       const orgId = req.user!.organizationId;
 
       if (!orgId) return res.status(400).json({ success: false, error: 'Organization ID not found' });
@@ -407,6 +411,7 @@ export class AuthController {
           ...(taxNumber !== undefined && { taxNumber }),
           ...(phone !== undefined && { phone }),
           ...(address !== undefined && { address }),
+          ...(website !== undefined && { website }),
           ...(logoUrl !== undefined && { logoUrl }),
           ...(status && { status })
         }

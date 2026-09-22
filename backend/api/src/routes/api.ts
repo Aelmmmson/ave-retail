@@ -6,6 +6,8 @@ import { shiftRouter } from './shiftRoutes';
 import { customerRouter } from './customerRoutes';
 import { expenseRouter } from './expenseRoutes';
 import { reportRouter } from './reportRoutes';
+import { transferRouter } from './transferRoutes';
+import { auditRouter } from './auditRoutes';
 
 export const router = Router();
 
@@ -18,3 +20,7 @@ router.use('/shifts', shiftRouter);
 router.use('/customers', customerRouter);
 router.use('/expenses', expenseRouter);
 router.use('/reports', reportRouter);
+router.use('/transfers', transferRouter);
+router.use('/audit', auditRouter);
+
+

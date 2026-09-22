@@ -1,4 +1,5 @@
 export type RoleType = 'OWNER' | 'ADMIN' | 'MANAGER' | 'SUPERVISOR' | 'CASHIER' | 'INVENTORY_OFFICER' | 'ACCOUNTANT';
+export type TaxPayerType = 'CUSTOMER' | 'BUSINESS';
 
 export interface UserDTO {
   id: string;
@@ -7,6 +8,17 @@ export interface UserDTO {
   role: RoleType;
   branchId?: string;
   permissions: string[];
+  organizationName?: string;
+  tagline?: string;
+  taxNumber?: string;
+  phone?: string;
+  address?: string;
+  website?: string;
+  receiptHeaderNote?: string;
+  receiptFooterNote?: string;
+  showLogoOnReceipt?: boolean;
+  loyaltyEarnRate?: number;
+  taxPayer?: TaxPayerType;
 }
 
 export interface AuthState {
@@ -21,6 +33,7 @@ export interface TaxRateDTO {
   name: string;
   ratePercent: number;
   isActive: boolean;
+  taxPayer?: TaxPayerType;
 }
 
 export interface CurrencyDTO {
@@ -31,15 +44,59 @@ export interface CurrencyDTO {
   isBaseCurrency: boolean;
 }
 
-export interface DiscountRuleDTO {
+export interface BrandDTO {
   id: string;
   name: string;
-  type: 'PERCENTAGE' | 'FIXED_AMOUNT';
-  value: number;
-  scope: 'ALL_PRODUCTS' | 'CATEGORY' | 'VARIANT';
-  variantId?: string;
+  createdAt?: string;
+}
+
+export interface ExpenseDTO {
+  id: string;
+  title: string;
+  amount: number;
+  category: string;
+  notes?: string;
+  date: string;
+  createdByName?: string;
+  branchId?: string;
+  createdAt?: string;
+}
+
+export interface WarehouseTransferItemDTO {
+  id: string;
+  variantId: string;
+  variantName?: string;
+  sku?: string;
+  quantity: number;
+}
+
+export interface WarehouseTransferDTO {
+  id: string;
+  transferNumber: string;
+  sourceWarehouseId: string;
+  sourceWarehouseName?: string;
+  destinationWarehouseId: string;
+  destinationWarehouseName?: string;
+  status: 'DRAFT' | 'REQUESTED' | 'APPROVED' | 'DISPATCHED' | 'RECEIVED' | 'CANCELLED';
+  requestedBy: string;
+  approvedBy?: string;
+  notes?: string;
+  createdAt: string;
+  items: WarehouseTransferItemDTO[];
+}
+
+export interface PromoRule {
+  id?: string;
+  name?: string;
+  type: 'PERCENTAGE' | 'FIXED_AMOUNT' | 'TARGET_PRICE' | 'BOGO';
+  value: number; // Percentage off, fixed amount off, or target selling price
+  buyQty?: number; // e.g. Buy 1 (or N)
+  getQtyFree?: number; // e.g. Get 1 free
   startDate?: string;
   endDate?: string;
+  startHour?: number; // 0-23
+  endHour?: number; // 0-23
+  daysOfWeek?: number[]; // [0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat]
   isActive: boolean;
 }
 
@@ -52,6 +109,9 @@ export interface ProductVariantDTO {
   variantName: string;
   costPrice: number;
   sellingPrice: number;
+  costCurrency?: string; // e.g. USD, EUR, CNY
+  sellingCurrency?: string; // e.g. GHS
+  exchangeRateRecorded?: number; // Rate snapshot at time of product intake
   minStockLevel: number;
   reorderLevel: number;
   quantityOnHand: number;
@@ -59,6 +119,8 @@ export interface ProductVariantDTO {
   brandName?: string;
   imageUrl?: string;
   activePromoDiscount?: number; // Active promotional discount
+  promoRule?: PromoRule;
+  promoRules?: PromoRule[]; // All active promo rules applied to this variant
 }
 
 export interface CartItemDTO {
@@ -74,6 +136,10 @@ export interface CartItemDTO {
   discountAmount: number; // calculated total currency amount off
   taxAmount: number;
   totalPrice: number;
+  promoRule?: PromoRule;
+  promoRules?: PromoRule[];
+  activePromoDiscount?: number;
+  quantityOnHand?: number;
 }
 
 export interface SalePaymentInput {
@@ -102,6 +168,9 @@ export interface CreateSaleDTO {
   amountReceived: number;
   changeGiven: number;
   notes?: string;
+  redeemedPoints?: number;
+  redeemedPointsDiscount?: number;
+  taxPayer?: TaxPayerType;
 }
 
 export interface SaleDTO {
@@ -171,6 +240,8 @@ export interface CustomerDTO {
   email?: string;
   address?: string;
   outstandingBalance: number;
+  loyaltyPoints: number;
+  loyaltyTier: string;
   status: 'ACTIVE' | 'INACTIVE';
   totalPurchasesCount: number;
   totalSpent: number;

@@ -20,22 +20,66 @@ import {
   DollarSign,
   BarChart3,
   Store,
-  Lock
+  Lock,
+  Eye,
+  EyeOff,
+  Coins,
+  Percent,
+  Plus,
+  Trash2,
+  UserCheck,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuthStore } from '../../store/authStore';
 import { useAlertStore } from '../../store/alertStore';
+import { useCartStore } from '../../store/cartStore';
 import { ApiClient } from '../../lib/api';
 
 export const ProfileView: React.FC = () => {
   const { user, currentBranch, login, branches } = useAuthStore();
   const { showToast } = useAlertStore();
+  const { taxPayer, setTaxPayer, setTaxRates: setGlobalTaxRates } = useCartStore();
 
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [name, setName] = useState(user?.name || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Tax Rates & Multi-Currency Management State (CRUD Option 5)
+  const [taxModalOpen, setTaxModalOpen] = useState(false);
+  const [taxRates, setTaxRates] = useState([
+    { id: 't1', code: 'VAT', name: 'Value Added Tax (VAT)', ratePercent: 15.0, isActive: true },
+    { id: 't2', code: 'NHIL', name: 'National Health Insurance Levy', ratePercent: 2.5, isActive: true },
+    { id: 't3', code: 'GETFUND', name: 'GETFund Levy', ratePercent: 2.5, isActive: true }
+  ]);
+  const [newTaxCode, setNewTaxCode] = useState('');
+  const [newTaxName, setNewTaxName] = useState('');
+  const [newTaxRate, setNewTaxRate] = useState(0);
+
+  const [currencies, setCurrencies] = useState([
+    { code: 'GHS', symbol: 'GH₵', name: 'Ghana Cedi', exchangeRateToBase: 1.0, isBaseCurrency: true },
+    { code: 'USD', symbol: '$', name: 'US Dollar', exchangeRateToBase: 15.8, isBaseCurrency: false },
+    { code: 'EUR', symbol: '€', name: 'Euro', exchangeRateToBase: 17.2, isBaseCurrency: false }
+  ]);
+  const [newCurrCode, setNewCurrCode] = useState('');
+  const [newCurrSymbol, setNewCurrSymbol] = useState('');
+  const [newCurrName, setNewCurrName] = useState('');
+  const [newCurrRate, setNewCurrRate] = useState(1.0);
+
+  // Inline Edit Tax state
+  const [editingTaxId, setEditingTaxId] = useState<string | null>(null);
+  const [editTaxName, setEditTaxName] = useState('');
+  const [editTaxRate, setEditTaxRate] = useState<number>(0);
+
+  // Inline Edit Currency state
+  const [editingCurrCode, setEditingCurrCode] = useState<string | null>(null);
+  const [editCurrName, setEditCurrName] = useState('');
+  const [editCurrSymbol, setEditCurrSymbol] = useState('');
+  const [editCurrRate, setEditCurrRate] = useState<number>(1.0);
 
   // Extract roles array with role hierarchy prioritization
   const getRoles = (): string[] => {
@@ -186,13 +230,22 @@ export const ProfileView: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => setEditModalOpen(true)}
-            className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-lg shadow-teal-600/30 transition flex items-center space-x-2 border border-teal-400/30"
-          >
-            <Edit3 className="w-4 h-4" />
-            <span>Edit Profile Info</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setTaxModalOpen(true)}
+              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-teal-300 font-bold text-xs sm:text-sm rounded-2xl shadow-lg transition flex items-center space-x-2 border border-teal-500/30 cursor-pointer"
+            >
+              <Percent className="w-4 h-4 text-teal-400" />
+              <span>Tax & Multi-Currency</span>
+            </button>
+            <button
+              onClick={() => setEditModalOpen(true)}
+              className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-lg shadow-teal-600/30 transition flex items-center space-x-2 border border-teal-400/30 cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4" />
+              <span>Edit Profile Info</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -390,25 +443,45 @@ export const ProfileView: React.FC = () => {
 
                 <div>
                   <label className="block text-slate-600 dark:text-slate-400 font-medium mb-1">New Password</label>
-                  <input
-                    type="password"
-                    placeholder="Leave blank to keep current password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? 'text' : 'password'}
+                      placeholder="Leave blank to keep current password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                      title={showNewPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 {newPassword && (
                   <div>
                     <label className="block text-slate-600 dark:text-slate-400 font-medium mb-1">Confirm New Password</label>
-                    <input
-                      type="password"
-                      placeholder="Confirm new password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
-                    />
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        placeholder="Confirm new password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        className="w-full pl-3 pr-10 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                        title={showConfirmPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -430,6 +503,444 @@ export const ProfileView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* 5. TAX RATES & MULTI-CURRENCY CRUD MANAGEMENT MODAL */}
+      {taxModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-2xl space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                <Percent className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                <span>Tax Rates & Multi-Currency Management</span>
+              </h3>
+              <button onClick={() => setTaxModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer font-bold">✕</button>
+            </div>
+
+            {/* SECTION 0: Tax Payment Responsibility (Who Pays Taxes: Customer vs Business) */}
+            <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <ShieldCheck className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+                  <span className="font-extrabold text-xs text-slate-900 dark:text-white">Tax Payment Responsibility (Who Pays Taxes)</span>
+                </div>
+                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black font-mono ${
+                  taxPayer === 'BUSINESS'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30'
+                    : 'bg-teal-500/10 text-teal-600 dark:text-teal-400 border border-teal-500/30'
+                }`}>
+                  {taxPayer === 'BUSINESS' ? 'BUSINESS COVERS TAX' : 'CUSTOMER PAYS TAX'}
+                </span>
+              </div>
+
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                Choose who pays for system tax levies. Regardless of selection, statutory tax breakdowns (VAT, NHIL, GETFund) will always be printed on checkout receipts.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTaxPayer('CUSTOMER');
+                    showToast('info', 'Tax Responsibility Set', 'Customer Pays Tax: Taxes are added on top of cart subtotal at checkout.');
+                  }}
+                  className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-start space-x-3 ${
+                    taxPayer === 'CUSTOMER'
+                      ? 'bg-teal-500/10 border-teal-500 text-teal-900 dark:text-teal-100 shadow-md ring-1 ring-teal-500'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg shrink-0 ${taxPayer === 'CUSTOMER' ? 'bg-teal-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                    <UserCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs flex items-center space-x-1">
+                      <span>Customer Pays Tax</span>
+                      <span className="text-[10px] font-mono opacity-80">(Exclusive)</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Taxes are added onto cart subtotal. Total = Subtotal + Taxes.
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTaxPayer('BUSINESS');
+                    showToast('info', 'Tax Responsibility Set', 'Business Covers Tax: Taxes are absorbed by store; customer pays item price only.');
+                  }}
+                  className={`p-3 rounded-xl border text-left transition cursor-pointer flex items-start space-x-3 ${
+                    taxPayer === 'BUSINESS'
+                      ? 'bg-amber-500/10 border-amber-500 text-amber-900 dark:text-amber-100 shadow-md ring-1 ring-amber-500'
+                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className={`p-2 rounded-lg shrink-0 ${taxPayer === 'BUSINESS' ? 'bg-amber-600 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="font-bold text-xs flex items-center space-x-1">
+                      <span>Business Covers Tax</span>
+                      <span className="text-[10px] font-mono opacity-80">(Inclusive)</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      Taxes are absorbed from item selling price. Tax breakdown appears on receipts.
+                    </div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* SECTION A: Tax Rates CRUD */}
+            <div className="space-y-3">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-teal-600 dark:text-teal-400 flex items-center space-x-1.5">
+                <Percent className="w-3.5 h-3.5" />
+                <span>Configured System Tax Rates</span>
+              </h4>
+
+              {/* Quick Preset Pickers for Common Tax Rates */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Quick Presets:</span>
+                {[
+                  { code: 'VAT', name: 'Value Added Tax', rate: 15.0 },
+                  { code: 'NHIL', name: 'National Health Insurance Levy', rate: 2.5 },
+                  { code: 'GETFUND', name: 'GETFund Levy', rate: 2.5 },
+                  { code: 'WHT', name: 'Withholding Tax', rate: 7.5 }
+                ].map(p => (
+                  <button
+                    key={p.code}
+                    type="button"
+                    onClick={() => {
+                      setNewTaxCode(p.code);
+                      setNewTaxName(p.name);
+                      setNewTaxRate(p.rate);
+                    }}
+                    className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-teal-500/20 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer"
+                  >
+                    + {p.code} ({p.rate}%)
+                  </button>
+                ))}
+              </div>
+
+              {/* Add Tax Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newTaxCode || !newTaxName) return;
+                  setTaxRates([...taxRates, { id: `t-${Date.now()}`, code: newTaxCode.toUpperCase(), name: newTaxName, ratePercent: Number(newTaxRate), isActive: true }]);
+                  showToast('success', 'Tax Rate Created', `Tax '${newTaxCode}' (${newTaxRate}%) added.`);
+                  setNewTaxCode('');
+                  setNewTaxName('');
+                  setNewTaxRate(0);
+                }}
+                className="grid grid-cols-4 gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs"
+              >
+                <input
+                  type="text"
+                  required
+                  placeholder="Code (e.g. VAT)"
+                  value={newTaxCode}
+                  onChange={(e) => setNewTaxCode(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-[11px]"
+                />
+                <input
+                  type="text"
+                  required
+                  placeholder="Tax Name (e.g. Value Added Tax)"
+                  value={newTaxName}
+                  onChange={(e) => setNewTaxName(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-[11px]"
+                />
+                <div className="relative flex items-center">
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    placeholder="Rate (15)"
+                    value={newTaxRate}
+                    onChange={(e) => setNewTaxRate(Number(e.target.value))}
+                    className="w-full pl-2.5 pr-6 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-[11px]"
+                  />
+                  <span className="absolute right-2 text-slate-400 font-bold text-xs">%</span>
+                </div>
+                <button type="submit" className="py-1.5 bg-teal-600 text-white font-bold rounded-xl text-xs hover:bg-teal-500 transition cursor-pointer">
+                  + Add Tax Rate
+                </button>
+              </form>
+
+              {/* Tax Rates List Table */}
+              <div className="space-y-1.5">
+                {taxRates.map((t) => (
+                  <div key={t.id} className="p-2.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                    {editingTaxId === t.id ? (
+                      <div className="flex-1 flex items-center space-x-2 mr-2">
+                        <span className="font-mono font-bold bg-teal-500/10 text-teal-700 dark:text-teal-300 px-2 py-1 rounded text-[10px]">{t.code}</span>
+                        <input
+                          type="text"
+                          value={editTaxName}
+                          onChange={(e) => setEditTaxName(e.target.value)}
+                          className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs flex-1"
+                          placeholder="Tax Name"
+                        />
+                        <div className="relative flex items-center w-24">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={editTaxRate}
+                            onChange={(e) => setEditTaxRate(Number(e.target.value))}
+                            className="w-full pl-2 pr-5 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono"
+                            placeholder="Rate %"
+                          />
+                          <span className="absolute right-1.5 text-slate-400 font-bold text-xs">%</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setTaxRates(taxRates.map(x => x.id === t.id ? { ...x, name: editTaxName, ratePercent: editTaxRate } : x));
+                            setEditingTaxId(null);
+                            showToast('success', 'Tax Updated', `Updated '${t.code}' tax settings.`);
+                          }}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold shadow cursor-pointer"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingTaxId(null)}
+                          className="px-2 py-1 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono font-bold bg-teal-500/10 text-teal-700 dark:text-teal-300 px-2 py-0.5 rounded text-[10px]">{t.code}</span>
+                          <span className="font-bold text-slate-800 dark:text-slate-200">{t.name}</span>
+                          <span className="font-mono text-slate-500">({t.ratePercent}%)</span>
+                        </div>
+                        <div className="flex items-center space-x-1.5">
+                          <button
+                            onClick={() => {
+                              setEditingTaxId(t.id);
+                              setEditTaxName(t.name);
+                              setEditTaxRate(t.ratePercent);
+                            }}
+                            className="p-1 text-teal-600 hover:bg-teal-500/10 rounded cursor-pointer"
+                            title="Edit Tax Rate"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setTaxRates(taxRates.map(x => x.id === t.id ? { ...x, isActive: !x.isActive } : x));
+                              showToast('info', 'Tax Status Switched', `'${t.name}' is now ${!t.isActive ? 'Active' : 'Inactive'}.`);
+                            }}
+                            className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer ${
+                              t.isActive ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'
+                            }`}
+                          >
+                            {t.isActive ? 'ACTIVE' : 'INACTIVE'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setTaxRates(taxRates.filter(x => x.id !== t.id));
+                              showToast('info', 'Tax Deleted', `Deleted '${t.name}'.`);
+                            }}
+                            className="p-1 text-rose-500 hover:bg-rose-500/10 rounded cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* SECTION B: Multi-Currency CRUD */}
+            <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-teal-600 dark:text-teal-400 flex items-center space-x-1.5">
+                <Coins className="w-3.5 h-3.5" />
+                <span>Multi-Currency Exchange Rates</span>
+              </h4>
+
+              {/* Quick Preset Pickers for Common Currencies */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                <span className="font-semibold text-slate-500 dark:text-slate-400">Quick Presets:</span>
+                {[
+                  { code: 'USD', symbol: '$', name: 'US Dollar', rate: 15.8 },
+                  { code: 'EUR', symbol: '€', name: 'Euro', rate: 17.2 },
+                  { code: 'GBP', symbol: '£', name: 'British Pound', rate: 20.5 },
+                  { code: 'NGN', symbol: '₦', name: 'Nigerian Naira', rate: 0.01 },
+                  { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling', rate: 0.12 },
+                  { code: 'AED', symbol: 'AED', name: 'UAE Dirham', rate: 4.30 },
+                  { code: 'CNY', symbol: '¥', name: 'Chinese Yuan (RMB)', rate: 2.22 },
+                  { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar', rate: 11.5 }
+                ].map(p => (
+                  <button
+                    key={p.code}
+                    type="button"
+                    onClick={() => {
+                      setNewCurrCode(p.code);
+                      setNewCurrSymbol(p.symbol);
+                      setNewCurrName(p.name);
+                      setNewCurrRate(p.rate);
+                    }}
+                    className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 hover:bg-teal-500/20 text-slate-700 dark:text-slate-300 rounded-lg text-[10px] font-mono font-bold transition cursor-pointer"
+                  >
+                    + {p.code} ({p.symbol})
+                  </button>
+                ))}
+              </div>
+
+              {/* Add Currency Form */}
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!newCurrCode || !newCurrSymbol) return;
+                  setCurrencies([...currencies, { code: newCurrCode.toUpperCase(), symbol: newCurrSymbol, name: newCurrName || newCurrCode, exchangeRateToBase: Number(newCurrRate) || 1.0, isBaseCurrency: false }]);
+                  showToast('success', 'Currency Added', `Currency ${newCurrCode} (${newCurrSymbol}) added.`);
+                  setNewCurrCode('');
+                  setNewCurrSymbol('');
+                  setNewCurrName('');
+                  setNewCurrRate(1.0);
+                }}
+                className="grid grid-cols-5 gap-2 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs"
+              >
+                <input
+                  type="text"
+                  required
+                  placeholder="Code (USD)"
+                  value={newCurrCode}
+                  onChange={(e) => setNewCurrCode(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-[11px]"
+                />
+                <input
+                  type="text"
+                  required
+                  placeholder="Symbol ($)"
+                  value={newCurrSymbol}
+                  onChange={(e) => setNewCurrSymbol(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-[11px]"
+                />
+                <input
+                  type="text"
+                  placeholder="Name (US Dollar)"
+                  value={newCurrName}
+                  onChange={(e) => setNewCurrName(e.target.value)}
+                  className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-[11px]"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="Rate to GHS"
+                  value={newCurrRate}
+                  onChange={(e) => setNewCurrRate(Number(e.target.value))}
+                  className="px-2.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-[11px]"
+                />
+                <button type="submit" className="py-1.5 bg-teal-600 text-white font-bold rounded-xl text-xs hover:bg-teal-500 transition cursor-pointer">
+                  + Add Currency
+                </button>
+              </form>
+
+              {/* Currency List Table */}
+              <div className="space-y-1.5">
+                {currencies.map((c) => (
+                  <div key={c.code} className="p-2.5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                    {editingCurrCode === c.code ? (
+                      <div className="flex-1 flex items-center space-x-2 mr-2">
+                        <span className="font-mono font-bold text-teal-600 dark:text-teal-400">{c.code}</span>
+                        <input
+                          type="text"
+                          value={editCurrSymbol}
+                          onChange={(e) => setEditCurrSymbol(e.target.value)}
+                          className="w-12 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono text-center"
+                          placeholder="Symbol"
+                        />
+                        <input
+                          type="text"
+                          value={editCurrName}
+                          onChange={(e) => setEditCurrName(e.target.value)}
+                          className="px-2 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs flex-1"
+                          placeholder="Currency Name"
+                        />
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editCurrRate}
+                          onChange={(e) => setEditCurrRate(Number(e.target.value))}
+                          className="w-24 px-2 py-1 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-mono"
+                          placeholder="Exchange Rate"
+                        />
+                        <button
+                          onClick={() => {
+                            setCurrencies(currencies.map(x => x.code === c.code ? { ...x, symbol: editCurrSymbol, name: editCurrName, exchangeRateToBase: editCurrRate } : x));
+                            setEditingCurrCode(null);
+                            showToast('success', 'Currency Updated', `Updated '${c.code}' exchange rate.`);
+                          }}
+                          className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold shadow cursor-pointer"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => setEditingCurrCode(null)}
+                          className="px-2 py-1 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center space-x-2 font-mono">
+                          <span className="font-bold text-teal-600 dark:text-teal-400">{c.symbol}</span>
+                          <span className="font-extrabold text-slate-800 dark:text-slate-200">{c.code}</span>
+                          <span className="text-[11px] text-slate-500">({c.name})</span>
+                          {c.isBaseCurrency && <span className="bg-emerald-500/20 text-emerald-600 text-[9px] px-1.5 py-0.5 rounded font-bold">BASE</span>}
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-mono text-[11px] text-slate-600 dark:text-slate-400 mr-1">1 {c.code} = {c.exchangeRateToBase} GHS</span>
+                          <button
+                            onClick={() => {
+                              setEditingCurrCode(c.code);
+                              setEditCurrSymbol(c.symbol);
+                              setEditCurrName(c.name);
+                              setEditCurrRate(c.exchangeRateToBase);
+                            }}
+                            className="p-1 text-teal-600 hover:bg-teal-500/10 rounded cursor-pointer"
+                            title="Edit Exchange Rate"
+                          >
+                            <Edit3 className="w-3.5 h-3.5" />
+                          </button>
+                          {!c.isBaseCurrency && (
+                            <button
+                              onClick={() => {
+                                setCurrencies(currencies.filter(x => x.code !== c.code));
+                                showToast('info', 'Currency Deleted', `Deleted '${c.code}'.`);
+                              }}
+                              className="p-1 text-rose-500 hover:bg-rose-500/10 rounded cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                onClick={() => setTaxModalOpen(false)}
+                className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs rounded-xl shadow cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}

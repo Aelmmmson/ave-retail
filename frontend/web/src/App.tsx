@@ -3,6 +3,7 @@ import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { AlertToast } from './components/AlertToast';
 import { InactivityTimeoutModal } from './components/InactivityTimeoutModal';
+import { ReceiptBuilderModal } from './components/ReceiptBuilderModal';
 import { LandingView } from './features/landing/LandingView';
 import { PosView } from './features/pos/PosView';
 import { InventoryView } from './features/inventory/InventoryView';
@@ -11,20 +12,30 @@ import { CustomerView } from './features/customers/CustomerView';
 import { ReportView } from './features/reports/ReportView';
 import { AuthModalView } from './features/auth/AuthModalView';
 import { UserManagementView } from './features/admin/UserManagementView';
+import { AuditView } from './features/admin/AuditView';
+import { HelpView } from './features/help/HelpView';
 import { ExpenseView } from './features/expenses/ExpenseView';
 import { ProfileView } from './features/profile/ProfileView';
+import { WarehouseTransferView } from './features/transfers/WarehouseTransferView';
+import { DiscountsView } from './features/discounts/DiscountsView';
+import { CustomerFacingDisplay } from './features/customerDisplay/CustomerFacingDisplay';
 import { ApiClient } from './lib/api';
 import { useThemeStore } from './store/themeStore';
 import { useAuthStore } from './store/authStore';
 
 export const App: React.FC = () => {
-  const [currentTab, setCurrentTab] = useState('landing');
+  const urlParams = new URLSearchParams(window.location.search);
+  const { isAuthenticated, loginAsDemo } = useAuthStore();
+  const rawView = urlParams.get('view');
+  const initialView = (rawView === 'guide' ? 'help' : rawView) || (isAuthenticated ? 'pos' : 'landing');
+
+  const [currentTab, setCurrentTab] = useState(initialView);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [receiptBuilderOpen, setReceiptBuilderOpen] = useState(false);
   
   const { theme } = useThemeStore();
-  const { isAuthenticated, loginAsDemo } = useAuthStore();
 
   useEffect(() => {
     // Global override to catch all native alert() calls and route to custom Toast UI
@@ -62,21 +73,34 @@ export const App: React.FC = () => {
     };
   }, []);
 
-  // Protected Navigation Guard: If user clicks an operational page while unauthenticated, open Login modal
+  const [selectedProductIdToAdjust, setSelectedProductIdToAdjust] = useState<string | null>(null);
+
+  // Protected Navigation Guard: Launch POS on login
   const handleTabChange = (tab: string) => {
-    if (tab !== 'landing' && !isAuthenticated) {
+    const targetTab = tab === 'guide' ? 'help' : tab;
+    if (targetTab !== 'landing' && targetTab !== 'help' && targetTab !== 'customer_display' && !isAuthenticated) {
       setAuthModalOpen(true);
       return;
     }
-    setCurrentTab(tab);
+    setCurrentTab(targetTab);
   };
 
-  // If user logs out while on a protected operational page, redirect to Landing page & Login modal
+  // Launch POS Checkout Register immediately once user logs in
   useEffect(() => {
-    if (!isAuthenticated && currentTab !== 'landing') {
+    if (currentTab === 'customer_display') return;
+    if (isAuthenticated) {
+      if (currentTab === 'landing' || !currentTab) {
+        setCurrentTab('pos');
+      }
+    } else if (!isAuthenticated && currentTab !== 'landing' && currentTab !== 'help') {
       setAuthModalOpen(true);
     }
-  }, [isAuthenticated, currentTab]);
+  }, [isAuthenticated]);
+
+  // Standalone Customer Facing Display Mode (No Authentication Guard Required)
+  if (currentTab === 'customer_display') {
+    return <CustomerFacingDisplay />;
+  }
 
   return (
     <div className={`min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-urbanist transition-colors ${theme}`}>
@@ -95,8 +119,8 @@ export const App: React.FC = () => {
           onOpenAuth={() => setAuthModalOpen(true)}
         />
       ) : (
-        /* 2. PROTECTED OPERATIONAL APP SHELL (Requires Authentication) */
-        isAuthenticated && (
+        /* 2. OPERATIONAL APP SHELL (Requires Authentication OR Public Guide View) */
+        (isAuthenticated || currentTab === 'help') && (
           <div className="h-screen flex flex-col overflow-hidden">
             <Header
               currentTab={currentTab}
@@ -104,30 +128,52 @@ export const App: React.FC = () => {
               isOnline={isOnline}
               onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               onOpenAuthModal={() => setAuthModalOpen(true)}
+              onOpenProductAdjustment={(prodId) => {
+                setSelectedProductIdToAdjust(prodId);
+                setCurrentTab('inventory');
+              }}
+              onOpenReceiptBuilder={() => setReceiptBuilderOpen(true)}
             />
 
             <div className="flex-1 flex overflow-hidden">
-              <Sidebar
-                currentTab={currentTab}
-                onTabChange={handleTabChange}
-                isOpenMobile={isMobileMenuOpen}
-                onCloseMobile={() => setIsMobileMenuOpen(false)}
-              />
+              {isAuthenticated && (
+                <Sidebar
+                  currentTab={currentTab}
+                  onTabChange={handleTabChange}
+                  isOpenMobile={isMobileMenuOpen}
+                  onCloseMobile={() => setIsMobileMenuOpen(false)}
+                />
+              )}
 
               <main className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 transition-colors">
                 {currentTab === 'pos' && <PosView />}
-                {currentTab === 'inventory' && <InventoryView />}
+                {currentTab === 'inventory' && (
+                  <InventoryView
+                    selectedProductIdToAdjust={selectedProductIdToAdjust}
+                    onClearSelectedProductToAdjust={() => setSelectedProductIdToAdjust(null)}
+                  />
+                )}
+                {currentTab === 'transfers' && <WarehouseTransferView />}
+                {currentTab === 'discounts' && <DiscountsView />}
                 {currentTab === 'shifts' && <ShiftView />}
                 {currentTab === 'customers' && <CustomerView />}
                 {currentTab === 'reports' && <ReportView />}
                 {currentTab === 'expenses' && <ExpenseView />}
                 {currentTab === 'admin' && <UserManagementView />}
+                {currentTab === 'audit' && <AuditView />}
+                {(currentTab === 'help' || currentTab === 'guide') && <HelpView />}
                 {currentTab === 'profile' && <ProfileView />}
               </main>
             </div>
           </div>
         )
       )}
+
+      {/* Thermal Receipt Builder Modal */}
+      <ReceiptBuilderModal
+        isOpen={receiptBuilderOpen}
+        onClose={() => setReceiptBuilderOpen(false)}
+      />
 
       {/* Login & Sign Up Auth Modal */}
       {authModalOpen && (

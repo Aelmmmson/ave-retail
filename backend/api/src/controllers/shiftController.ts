@@ -41,7 +41,7 @@ export class ShiftController {
       const validation = validateCloseShift(req.body);
       if (!validation.valid) return res.status(400).json({ success: false, errors: validation.errors });
 
-      const shift = await ShiftService.closeShift(req.body.shiftId, req.body.actualClosingCash);
+      const shift = await ShiftService.closeShift(req.body.shiftId, req.body.actualClosingCash, req.body.managerPin);
       broadcastShiftUpdated(shift);
       res.json({ success: true, data: shift });
     } catch (err: any) {

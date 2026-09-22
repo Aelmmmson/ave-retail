@@ -14,8 +14,13 @@ export interface UserProfile {
   taxNumber?: string;
   phone?: string;
   address?: string;
+  website?: string;
   logoUrl?: string;
   establishedDate?: string;
+  receiptHeaderNote?: string;
+  receiptFooterNote?: string;
+  showLogoOnReceipt?: boolean;
+  loyaltyEarnRate?: number;
   createdAt?: string;
   status?: string;
 }

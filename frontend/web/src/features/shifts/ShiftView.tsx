@@ -5,6 +5,7 @@ import { ApiClient } from '../../lib/api';
 import { formatMoney } from '@ave/shared';
 import { useCartStore } from '../../store/cartStore';
 import { useAlertStore } from '../../store/alertStore';
+import { CustomSelect } from '../../components/CustomSelect';
 
 export const ShiftView: React.FC = () => {
   const { activeShiftId, setActiveShift } = useCartStore();
@@ -115,16 +116,27 @@ export const ShiftView: React.FC = () => {
     }
   };
 
-  const handleCloseShift = async () => {
+  const [managerPinInput, setManagerPinInput] = useState('');
+
+  const handleCloseShift = async (overridePin?: string) => {
     if (!shiftData) return;
     const expected = shiftData.openingFloat + shiftData.totalCashSales + shiftData.totalCashIn - shiftData.totalCashOut;
     const diff = actualCashInput - expected;
+
+    const pinToUse = overridePin || managerPinInput;
+
+    if (diff !== 0 && !pinToUse) {
+      showToast('warning', 'Manager Authorization Required', `Cash drawer variance of GH₵ ${diff.toFixed(2)} detected. Please enter a Manager PIN to authorize closing.`);
+      return;
+    }
+
     try {
       const res = await ApiClient.request('/shifts/close', {
         method: 'POST',
         body: JSON.stringify({
           shiftId: shiftData.id,
-          actualClosingCash: actualCashInput
+          actualClosingCash: actualCashInput,
+          managerPin: pinToUse || undefined
         })
       });
       if (res.success) {
@@ -134,6 +146,7 @@ export const ShiftView: React.FC = () => {
           `Shift closed successfully. Cash variance: ${diff === 0 ? 'GH₵ 0.00 (Exact Match)' : `GH₵ ${diff.toFixed(2)}`}`
         );
         setCloseModalOpen(false);
+        setManagerPinInput('');
         setActiveShift(null);
         setShiftData(null);
         loadActiveShift();
@@ -145,6 +158,7 @@ export const ShiftView: React.FC = () => {
         `Cash drawer count logged (Count: GH₵ ${actualCashInput.toFixed(2)}, Expected: GH₵ ${expected.toFixed(2)}).`
       );
       setCloseModalOpen(false);
+      setManagerPinInput('');
       setActiveShift(null);
       setShiftData({
         ...shiftData,
@@ -307,9 +321,33 @@ export const ShiftView: React.FC = () => {
               />
             </div>
 
+            {/* Manager PIN Override Input for Cash Variance */}
+            {shiftData && (actualCashInput - (shiftData.openingFloat + shiftData.totalCashSales + shiftData.totalCashIn - shiftData.totalCashOut)) !== 0 && (
+              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl space-y-2">
+                <div className="flex items-center space-x-1.5 text-amber-600 dark:text-amber-400 font-bold text-xs">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>Drawer Cash Variance Detected</span>
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                  Variance: <span className="font-mono font-bold text-rose-600">GH₵ {(actualCashInput - (shiftData.openingFloat + shiftData.totalCashSales + shiftData.totalCashIn - shiftData.totalCashOut)).toFixed(2)}</span>. Manager PIN authorization is required to approve this discrepancy.
+                </p>
+                <div>
+                  <label className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1">Manager Authorization PIN</label>
+                  <input
+                    type="password"
+                    maxLength={6}
+                    placeholder="Enter 4-6 digit Manager PIN"
+                    value={managerPinInput}
+                    onChange={(e) => setManagerPinInput(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-amber-500/50 rounded-xl font-mono text-center tracking-widest text-sm text-slate-900 dark:text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end space-x-2 pt-2">
               <button onClick={() => setCloseModalOpen(false)} className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs rounded-xl">Cancel</button>
-              <button onClick={handleCloseShift} className="px-4 py-2 bg-rose-600 text-white text-xs font-semibold rounded-xl hover:bg-rose-500 transition">Reconcile & Close</button>
+              <button onClick={() => handleCloseShift()} className="px-4 py-2 bg-rose-600 text-white text-xs font-semibold rounded-xl hover:bg-rose-500 transition">Reconcile & Close</button>
             </div>
           </div>
         </div>
@@ -320,17 +358,15 @@ export const ShiftView: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-md space-y-4 shadow-2xl">
             <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">Record Non-Sale Cash Movement</h3>
             <div className="space-y-3">
-              <div>
-                <label className="text-xs text-slate-700 dark:text-slate-300 block mb-1">Movement Type</label>
-                <select
-                  value={movementType}
-                  onChange={(e: any) => setMovementType(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white"
-                >
-                  <option value="CASH_IN">Cash In (Additional Float)</option>
-                  <option value="CASH_OUT">Cash Out (Petty Cash / Expense)</option>
-                </select>
-              </div>
+              <CustomSelect
+                label="Movement Type"
+                value={movementType}
+                onChange={(val) => setMovementType(val as any)}
+                options={[
+                  { value: 'CASH_IN', label: 'Cash In (Additional Float)', description: 'Add cash into drawer' },
+                  { value: 'CASH_OUT', label: 'Cash Out (Petty Cash / Expense)', description: 'Withdraw cash from drawer' }
+                ]}
+              />
 
               <div>
                 <label className="text-xs text-slate-700 dark:text-slate-300 block mb-1 font-semibold">Amount (GH₵)</label>

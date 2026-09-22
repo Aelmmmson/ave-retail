@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Store, Lock, Mail, User, Phone, LogIn, UserPlus, CheckCircle2, ChevronRight, ChevronLeft, Building, ShieldCheck, FileText, Upload } from 'lucide-react';
+import { Store, Lock, Mail, User, Phone, LogIn, UserPlus, CheckCircle2, ChevronRight, ChevronLeft, Building, ShieldCheck, FileText, Upload, Eye, EyeOff, Globe } from 'lucide-react';
 import { ApiClient } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import { useAlertStore } from '../../store/alertStore';
@@ -15,6 +15,8 @@ export const AuthModalView: React.FC<AuthModalViewProps> = ({ onClose }) => {
   // Login fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   // Sign-Up fields
   const [businessName, setBusinessName] = useState('');
@@ -23,18 +25,41 @@ export const AuthModalView: React.FC<AuthModalViewProps> = ({ onClose }) => {
   const [tagline, setTagline] = useState('');
   const [taxNumber, setTaxNumber] = useState('');
   const [address, setAddress] = useState('');
+  const [website, setWebsite] = useState('');
   const [logoUrl, setLogoUrl] = useState('');
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      showToast('error', 'File Too Large', 'Please select a business logo image smaller than 2MB.');
-      return;
-    }
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setLogoUrl(reader.result as string);
+    reader.onload = (evt) => {
+      const img = new Image();
+      img.src = evt.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 450;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          setLogoUrl(canvas.toDataURL('image/jpeg', 0.85));
+        } else {
+          setLogoUrl(evt.target?.result as string);
+        }
+      };
+      img.onerror = () => setLogoUrl(evt.target?.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -103,7 +128,7 @@ export const AuthModalView: React.FC<AuthModalViewProps> = ({ onClose }) => {
     try {
       const res = await ApiClient.request('/auth/signup', {
         method: 'POST',
-        body: JSON.stringify({ businessName, adminName, email, password, phone, tagline, taxNumber, address, logoUrl })
+        body: JSON.stringify({ businessName, adminName, email, password, phone, tagline, taxNumber, address, website, logoUrl })
       });
       if (res.success) {
         login(res.data.user, res.data.token, res.data.user.branches);
@@ -200,15 +225,23 @@ export const AuthModalView: React.FC<AuthModalViewProps> = ({ onClose }) => {
             <div>
               <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Password</label>
               <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                <Lock className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
                 <input
-                  type="password"
+                  type={showLoginPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
+                  className="w-full pl-9 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                  title={showLoginPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
@@ -396,6 +429,22 @@ export const AuthModalView: React.FC<AuthModalViewProps> = ({ onClose }) => {
                   </div>
                 </div>
 
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
+                    Business Website (Optional)
+                  </label>
+                  <div className="relative">
+                    <Globe className="w-4 h-4 absolute left-3 top-3.5 text-slate-400" />
+                    <input
+                      type="url"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      placeholder="https://www.yourbusiness.com"
+                      className="w-full pl-9 pr-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
+                    />
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
@@ -475,14 +524,24 @@ export const AuthModalView: React.FC<AuthModalViewProps> = ({ onClose }) => {
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">
                     Account Password *
                   </label>
-                  <input
-                    type="password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Create a secure password"
-                    className="w-full px-3 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showSignupPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Create a secure password"
+                      className="w-full pl-3 pr-10 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-teal-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPassword(!showSignupPassword)}
+                      className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                      title={showSignupPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showSignupPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="flex items-center space-x-3 pt-2">
@@ -537,6 +596,13 @@ export const AuthModalView: React.FC<AuthModalViewProps> = ({ onClose }) => {
                     <div className="text-[11px]">
                       <span className="text-slate-400 block">Address:</span>
                       <span className="font-semibold">{address}</span>
+                    </div>
+                  )}
+
+                  {website && (
+                    <div className="text-[11px]">
+                      <span className="text-slate-400 block">Website:</span>
+                      <span className="font-semibold text-teal-600 dark:text-teal-400 font-mono">{website}</span>
                     </div>
                   )}
 

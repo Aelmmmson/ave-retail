@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, ShoppingCart, Package, Clock, Users, BarChart3, Shield, DollarSign, UserCheck, ChevronRight, Store } from 'lucide-react';
+import { Home, ShoppingCart, Package, Clock, Users, BarChart3, Shield, DollarSign, UserCheck, ChevronRight, Store, ArrowRightLeft, Percent, ShieldCheck, HelpCircle } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 
 interface SidebarProps {
@@ -21,6 +21,8 @@ interface NavSection {
   title: string;
   items: NavItem[];
 }
+
+import { APP_VERSION } from '../config/version';
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, isOpenMobile, onCloseMobile }) => {
   const { user } = useAuthStore();
@@ -52,7 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, isOpe
   const userPermissions = (user?.permissions || []).map(p => String(p).toLowerCase().trim());
 
   const hasAccess = (itemId: string, itemRoles?: string[]): boolean => {
-    if (itemId === 'landing') return true;
+    if (itemId === 'landing' || itemId === 'help' || itemId === 'guide') return true;
     // OWNER and ADMIN always have full access to all sections
     if (userRoles.includes('OWNER') || userRoles.includes('ADMIN')) return true;
     // Granular Module Permission Switch override check (e.g., 'expenses', 'inventory', 'customers', 'reports')
@@ -90,6 +92,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, isOpe
           label: 'Products & Stock', 
           icon: Package, 
           roles: ['OWNER', 'ADMIN', 'MANAGER', 'SUPERVISOR', 'INVENTORY_OFFICER'] 
+        },
+        {
+          id: 'transfers',
+          label: 'Warehouse Transfers',
+          icon: ArrowRightLeft,
+          roles: ['OWNER', 'ADMIN', 'MANAGER', 'SUPERVISOR', 'INVENTORY_OFFICER']
+        },
+        {
+          id: 'discounts',
+          label: 'Promos & Discounts',
+          icon: Percent,
+          badge: 'Engine',
+          roles: ['OWNER', 'ADMIN', 'MANAGER', 'SUPERVISOR', 'INVENTORY_OFFICER']
         }
       ]
     },
@@ -135,6 +150,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, isOpe
           icon: Shield, 
           badge: 'Admin',
           roles: ['OWNER', 'ADMIN'] 
+        },
+        {
+          id: 'audit',
+          label: 'Compliance Audit Logs',
+          icon: ShieldCheck,
+          badge: 'Logs',
+          roles: ['OWNER', 'ADMIN', 'MANAGER']
+        }
+      ]
+    },
+    {
+      title: 'Support & Documentation',
+      items: [
+        {
+          id: 'help',
+          label: 'System Help & Guide',
+          icon: HelpCircle,
+          badge: 'Guide'
         }
       ]
     }
@@ -168,7 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, isOpe
 
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = currentTab === item.id;
+                  const isActive = currentTab === item.id || (item.id === 'help' && currentTab === 'guide');
                   return (
                     <button
                       key={item.id}
@@ -210,7 +243,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentTab, onTabChange, isOpe
         <div className="border-t border-slate-200 dark:border-slate-800 p-3 bg-slate-50/50 dark:bg-slate-900/50">
           <div className="flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 font-mono">
             <span>Ave Retail System</span>
-            <span className="px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold">v1.8.0</span>
+            <span className="px-1.5 py-0.5 rounded bg-slate-200/60 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold">{APP_VERSION}</span>
           </div>
         </div>
       </aside>

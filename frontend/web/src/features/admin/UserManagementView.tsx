@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, Users, UserPlus, Power, Trash2, Building, CheckSquare, Square, AlertTriangle, CheckCircle, RefreshCw, Plus, Edit, Image, Calendar, Mail, Phone, MapPin, ArrowRightLeft, Key, Tag } from 'lucide-react';
+import { Shield, Users, UserPlus, Power, Trash2, Building, CheckSquare, Square, AlertTriangle, CheckCircle, RefreshCw, Plus, Edit, Image, Calendar, Mail, Phone, MapPin, ArrowRightLeft, Key, Tag, Eye, EyeOff, Globe } from 'lucide-react';
 import { ApiClient } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import { useAlertStore } from '../../store/alertStore';
@@ -33,6 +33,7 @@ export const UserManagementView: React.FC = () => {
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
   const [newUserPhone, setNewUserPhone] = useState('');
   const [newUserBranchId, setNewUserBranchId] = useState(currentBranch?.id || '');
   const [selectedRoles, setSelectedRoles] = useState<string[]>(['CASHIER']);
@@ -72,11 +73,17 @@ export const UserManagementView: React.FC = () => {
   const [bizName, setBizName] = useState(user?.organizationName || 'Ave Retail');
   const [bizTagline, setBizTagline] = useState(user?.tagline || 'Everyday Quality Retail');
   const [bizLogoUrl, setBizLogoUrl] = useState(user?.logoUrl || '');
+  const [bizWebsite, setBizWebsite] = useState(user?.website || '');
   const [bizEstablishedDate, setBizEstablishedDate] = useState(user?.establishedDate || '2020-01-15');
   const [bizTaxNumber, setBizTaxNumber] = useState(user?.taxNumber || 'C0012345678');
   const [bizPhone, setBizPhone] = useState(user?.phone || '+233 24 111 2233');
   const [bizAddress, setBizAddress] = useState(user?.address || 'Accra, Ghana');
   const [bizStatus, setBizStatus] = useState(user?.status || 'ACTIVE');
+  const [bizReceiptHeaderNote, setBizReceiptHeaderNote] = useState(user?.receiptHeaderNote || 'Welcome to Ave Retail Store');
+  const [bizReceiptFooterNote, setBizReceiptFooterNote] = useState(user?.receiptFooterNote || 'No refund without official receipt. Thank you!');
+  const [bizShowLogoOnReceipt, setBizShowLogoOnReceipt] = useState(user?.showLogoOnReceipt !== false);
+  const [bizLoyaltyEarnRate, setBizLoyaltyEarnRate] = useState(user?.loyaltyEarnRate || 10.0);
+  const [bizStep, setBizStep] = useState<number>(1);
 
   // Business Delete Safety Modal
   const [deleteBizModalOpen, setDeleteBizModalOpen] = useState(false);
@@ -230,13 +237,22 @@ export const UserManagementView: React.FC = () => {
 
   const handleOpenBranchTransfer = (staff: StaffUser) => {
     setTransferStaff(staff);
-    setTransferTargetBranchId(staff.branchId || staff.branch?.id || currentBranch?.id || '');
+    const currentStaffBranchId = staff.branchId || staff.branch?.id || '';
+    const availableDestination = branches.find(b => b.id !== currentStaffBranchId);
+    setTransferTargetBranchId(availableDestination ? availableDestination.id : '');
     setTransferModalOpen(true);
   };
 
   const handleExecuteBranchTransfer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!transferStaff || !transferTargetBranchId) return;
+
+    const currentStaffBranchId = transferStaff.branchId || transferStaff.branch?.id || '';
+    if (transferTargetBranchId === currentStaffBranchId) {
+      showToast('warning', 'Invalid Transfer Destination', 'Staff member is already assigned to this branch. Please select a different branch.');
+      return;
+    }
+
     try {
       const targetBranch = branches.find(b => b.id === transferTargetBranchId);
       const res = await ApiClient.request(`/auth/users/${transferStaff.id}`, {
@@ -373,11 +389,16 @@ export const UserManagementView: React.FC = () => {
           name: bizName,
           tagline: bizTagline,
           logoUrl: bizLogoUrl,
+          website: bizWebsite,
           establishedDate: bizEstablishedDate,
           taxNumber: bizTaxNumber,
           phone: sanitizedPhone,
           address: bizAddress,
-          status: bizStatus
+          status: bizStatus,
+          receiptHeaderNote: bizReceiptHeaderNote,
+          receiptFooterNote: bizReceiptFooterNote,
+          showLogoOnReceipt: bizShowLogoOnReceipt,
+          loyaltyEarnRate: Number(bizLoyaltyEarnRate) || 10.0
         })
       });
       if (res.success) {
@@ -385,13 +406,18 @@ export const UserManagementView: React.FC = () => {
           organizationName: bizName,
           tagline: bizTagline,
           logoUrl: bizLogoUrl,
+          website: bizWebsite,
           establishedDate: bizEstablishedDate,
           taxNumber: bizTaxNumber,
           phone: sanitizedPhone,
           address: bizAddress,
-          status: bizStatus
+          status: bizStatus,
+          receiptHeaderNote: bizReceiptHeaderNote,
+          receiptFooterNote: bizReceiptFooterNote,
+          showLogoOnReceipt: bizShowLogoOnReceipt,
+          loyaltyEarnRate: Number(bizLoyaltyEarnRate) || 10.0
         });
-        showToast('success', 'Business Profile Saved', 'Organization profile updated successfully.');
+        showToast('success', 'Business Profile Saved', 'Organization profile, receipt custom notes, and loyalty settings saved successfully.');
         setEditBizModalOpen(false);
       }
     } catch (e: any) {
@@ -565,6 +591,22 @@ export const UserManagementView: React.FC = () => {
             <div className="min-w-0 truncate">
               <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Physical Address</span>
               <span className="font-bold text-slate-800 dark:text-slate-200 truncate block">{user?.address || 'Oxford Street, Osu, Accra'}</span>
+            </div>
+          </div>
+
+          <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-center space-x-3">
+            <div className="p-2 rounded-xl bg-teal-500/10 text-teal-600 dark:text-teal-400">
+              <Globe className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 truncate">
+              <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">Official Website</span>
+              {user?.website || bizWebsite ? (
+                <a href={(user?.website || bizWebsite).startsWith('http') ? (user?.website || bizWebsite) : `https://${user?.website || bizWebsite}`} target="_blank" rel="noreferrer" className="font-bold text-teal-600 dark:text-teal-400 hover:underline truncate block font-mono">
+                  {user?.website || bizWebsite}
+                </a>
+              ) : (
+                <span className="font-semibold text-slate-400 font-mono">None Provided</span>
+              )}
             </div>
           </div>
         </div>
@@ -848,7 +890,15 @@ export const UserManagementView: React.FC = () => {
               <div>
                 <CustomSelect
                   label="Select Destination Store Branch"
-                  options={branchSelectOptions}
+                  options={branches.map(b => {
+                    const isCurrent = b.id === (transferStaff.branchId || transferStaff.branch?.id);
+                    return {
+                      value: b.id,
+                      label: isCurrent ? `${b.name} (Current Branch - Disabled)` : b.name,
+                      disabled: isCurrent,
+                      description: isCurrent ? 'Staff member is currently located at this branch' : `Branch Code: ${b.code || 'BR'}`
+                    };
+                  })}
                   value={transferTargetBranchId}
                   onChange={(val) => setTransferTargetBranchId(val)}
                   icon={Building}
@@ -920,7 +970,11 @@ export const UserManagementView: React.FC = () => {
                   {[
                     { id: 'expenses', label: 'Manage Store Expenses' },
                     { id: 'inventory', label: 'Products & Stock Adjustments' },
+                    { id: 'transfers', label: 'Inter-Warehouse Stock Transfers' },
                     { id: 'customers', label: 'Customer Credit & Debt Ledgers' },
+                    { id: 'loyalty', label: 'Customer Loyalty & Rewards Program' },
+                    { id: 'tax_currency', label: 'Tax Rates & Multi-Currency Settings' },
+                    { id: 'brands', label: 'Brand & Manufacturer Management' },
                     { id: 'reports', label: 'View Financial Reports & Net Profit' },
                     { id: 'admin', label: 'Business & Staff Administration' }
                   ].map((mod) => {
@@ -1014,14 +1068,24 @@ export const UserManagementView: React.FC = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Password *</label>
-                  <input
-                    type="password"
-                    required
-                    value={newUserPassword}
-                    onChange={(e) => setNewUserPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showStaffPassword ? 'text' : 'password'}
+                      required
+                      value={newUserPassword}
+                      onChange={(e) => setNewUserPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-3 pr-10 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowStaffPassword(!showStaffPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+                      title={showStaffPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showStaffPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
                 </div>
 
                 <div>
@@ -1211,41 +1275,102 @@ export const UserManagementView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Module Permissions</label>
-                <div className="space-y-1.5 p-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl">
+                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Granular Action & CRUD Module Permissions</label>
+                <div className="space-y-2 p-3 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-2xl max-h-60 overflow-y-auto text-xs">
                   {[
-                    { id: 'expenses', label: 'Manage Store Expenses' },
-                    { id: 'inventory', label: 'Products & Stock Adjustments' },
-                    { id: 'customers', label: 'Customer Credit & Debt Ledgers' },
-                    { id: 'reports', label: 'View Financial Reports & Net Profit' }
-                  ].map((mod) => {
-                    const isChecked = editUserPermissions.includes(mod.id);
-                    return (
-                      <button
-                        type="button"
-                        key={mod.id}
-                        onClick={() => {
-                          if (isChecked) {
-                            setEditUserPermissions(editUserPermissions.filter(p => p !== mod.id));
-                          } else {
-                            setEditUserPermissions([...editUserPermissions, mod.id]);
-                          }
-                        }}
-                        className={`w-full flex items-center justify-between p-2 rounded-lg border text-left transition cursor-pointer ${
-                          isChecked
-                            ? 'bg-teal-50 dark:bg-teal-950/60 border-teal-500 text-teal-900 dark:text-teal-200'
-                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
-                        }`}
-                      >
-                        <span className="font-bold text-[11px]">{mod.label}</span>
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center font-bold text-[10px] shrink-0 ${
-                          isChecked ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-400'
-                        }`}>
-                          {isChecked ? 'Y' : ''}
-                        </div>
-                      </button>
-                    );
-                  })}
+                    {
+                      category: '🛒 POS & Sales Checkout',
+                      items: [
+                        { id: 'pos', label: 'Launch POS Checkout Register' },
+                        { id: 'pos_discount', label: 'Grant Manual Cart & Item Discounts' }
+                      ]
+                    },
+                    {
+                      category: '🚚 Inter-Warehouse Stock Transfers',
+                      items: [
+                        { id: 'transfers', label: 'View Stock Transfers Module' },
+                        { id: 'transfers_create', label: 'Create / Request Stock Transfers' },
+                        { id: 'transfers_approve', label: 'Approve, Dispatch & Receive Transfers (Mandate)' }
+                      ]
+                    },
+                    {
+                      category: '📦 Products & Inventory Management',
+                      items: [
+                        { id: 'inventory', label: 'View Products & Stock Catalog' },
+                        { id: 'inventory_create', label: 'Add New Products & Receive Initial Stock' },
+                        { id: 'inventory_adjust', label: 'Perform Stock Adjustments & Damage Deductions' },
+                        { id: 'brands', label: 'Manage Manufacturer Brands' }
+                      ]
+                    },
+                    {
+                      category: '👥 Customer Directory & Store Credit',
+                      items: [
+                        { id: 'customers', label: 'View Customer Credit Directory' },
+                        { id: 'customers_create', label: 'Create & Edit Customer Profiles' },
+                        { id: 'customers_credit_sale', label: 'Authorize Customer Credit Sales (Store Credit)' },
+                        { id: 'customers_payment', label: 'Process Debt Repayments & Credit Notes' },
+                        { id: 'loyalty', label: 'Manage Customer Loyalty & Reward Points' }
+                      ]
+                    },
+                    {
+                      category: '⏱️ Cashier Shifts & Till Drawer',
+                      items: [
+                        { id: 'shifts', label: 'Open & Operate Cashier Register Shifts' },
+                        { id: 'shifts_movement', label: 'Log Non-Sale Cash Movements (CASH_IN / OUT)' },
+                        { id: 'shifts_reconcile', label: 'Reconcile Drawer Variances & Close Shifts' }
+                      ]
+                    },
+                    {
+                      category: '💵 Operating Expenses',
+                      items: [
+                        { id: 'expenses', label: 'View Store Operating Expenses' },
+                        { id: 'expenses_create', label: 'Log New Store Expense Entries' },
+                        { id: 'expenses_delete', label: 'Delete Store Expense Records' }
+                      ]
+                    },
+                    {
+                      category: '📊 Reports, Tax & System Setup',
+                      items: [
+                        { id: 'reports', label: 'View Financial Reports & Operating Profit' },
+                        { id: 'tax_currency', label: 'Manage Tax Rates & Multi-Currency Settings' },
+                        { id: 'admin', label: 'Enterprise Administration & Staff Management' }
+                      ]
+                    }
+                  ].map((group) => (
+                    <div key={group.category} className="space-y-1">
+                      <div className="font-bold text-[10px] text-teal-600 dark:text-teal-400 uppercase tracking-wider pt-1">{group.category}</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                        {group.items.map((mod) => {
+                          const isChecked = editUserPermissions.includes(mod.id);
+                          return (
+                            <button
+                              type="button"
+                              key={mod.id}
+                              onClick={() => {
+                                if (isChecked) {
+                                  setEditUserPermissions(editUserPermissions.filter(p => p !== mod.id));
+                                } else {
+                                  setEditUserPermissions([...editUserPermissions, mod.id]);
+                                }
+                              }}
+                              className={`flex items-center justify-between p-2 rounded-xl border text-left transition cursor-pointer ${
+                                isChecked
+                                  ? 'bg-teal-50 dark:bg-teal-950/60 border-teal-500 text-teal-900 dark:text-teal-200'
+                                  : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                              }`}
+                            >
+                              <span className="font-semibold text-[10px]">{mod.label}</span>
+                              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center font-bold text-[9px] shrink-0 ml-1 ${
+                                isChecked ? 'bg-teal-600 text-white border-teal-600' : 'border-slate-400'
+                              }`}>
+                                {isChecked ? '✓' : ''}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1336,118 +1461,272 @@ export const UserManagementView: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: Edit Business Settings */}
+      {/* MODAL: Edit Business Settings (3-Step Wizard Modal) */}
       {editBizModalOpen && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-2xl space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
             <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
-              <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
-                <Building className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-                <span>Edit Business Profile & Branding</span>
-              </h3>
-              <button onClick={() => setEditBizModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
+              <div>
+                <h3 className="font-extrabold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                  <Building className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                  <span>Edit Business Profile & Settings</span>
+                </h3>
+                <p className="text-[11px] text-slate-400">Configure your business identity, store location details, thermal receipts, and loyalty settings.</p>
+              </div>
+              <button onClick={() => setEditBizModalOpen(false)} className="text-slate-400 hover:text-white font-bold cursor-pointer">✕</button>
             </div>
 
-            <form onSubmit={handleSaveBusinessSettings} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Business Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={bizName}
-                  onChange={(e) => setBizName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                />
-              </div>
+            {/* Step Progress Bar Header */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => setBizStep(1)}
+                className={`py-2 px-3 rounded-xl border text-center transition flex items-center justify-center space-x-2 cursor-pointer ${
+                  bizStep === 1
+                    ? 'bg-teal-600 text-white border-teal-600 font-bold shadow-md'
+                    : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-white/20 text-xs font-black flex items-center justify-center shrink-0">1</span>
+                <span className="text-xs font-semibold truncate">Business Identity</span>
+              </button>
 
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Business Logo Image URL</label>
-                <input
-                  type="url"
-                  value={bizLogoUrl}
-                  onChange={(e) => setBizLogoUrl(e.target.value)}
-                  placeholder="https://example.com/logo.png"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono text-[11px]"
-                />
-              </div>
+              <button
+                type="button"
+                onClick={() => setBizStep(2)}
+                className={`py-2 px-3 rounded-xl border text-center transition flex items-center justify-center space-x-2 cursor-pointer ${
+                  bizStep === 2
+                    ? 'bg-teal-600 text-white border-teal-600 font-bold shadow-md'
+                    : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-white/20 text-xs font-black flex items-center justify-center shrink-0">2</span>
+                <span className="text-xs font-semibold truncate">Contact & Status</span>
+              </button>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Date Established</label>
-                  <input
-                    type="date"
-                    value={bizEstablishedDate}
-                    onChange={(e) => setBizEstablishedDate(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
-                  />
+              <button
+                type="button"
+                onClick={() => setBizStep(3)}
+                className={`py-2 px-3 rounded-xl border text-center transition flex items-center justify-center space-x-2 cursor-pointer ${
+                  bizStep === 3
+                    ? 'bg-teal-600 text-white border-teal-600 font-bold shadow-md'
+                    : 'bg-slate-100 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800'
+                }`}
+              >
+                <span className="w-5 h-5 rounded-full bg-white/20 text-xs font-black flex items-center justify-center shrink-0">3</span>
+                <span className="text-xs font-semibold truncate">Receipts & Loyalty</span>
+              </button>
+            </div>
+
+            {/* Modal Form Content */}
+            <form onSubmit={handleSaveBusinessSettings} className="space-y-4 text-xs pt-1">
+              {/* STEP 1: Core Business Profile */}
+              {bizStep === 1 && (
+                <div className="space-y-3.5 animate-fadeIn">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Business Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={bizName}
+                      onChange={(e) => setBizName(e.target.value)}
+                      placeholder="e.g. Ave Retail Enterprise Ltd"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Business Logo Image URL</label>
+                    <input
+                      type="url"
+                      value={bizLogoUrl}
+                      onChange={(e) => setBizLogoUrl(e.target.value)}
+                      placeholder="https://example.com/logo.png"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Official Business Website</label>
+                    <input
+                      type="url"
+                      value={bizWebsite}
+                      onChange={(e) => setBizWebsite(e.target.value)}
+                      placeholder="https://www.yourbusiness.com"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Date Established</label>
+                      <input
+                        type="date"
+                        value={bizEstablishedDate}
+                        onChange={(e) => setBizEstablishedDate(e.target.value)}
+                        className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">TIN / Tax Number</label>
+                      <input
+                        type="text"
+                        value={bizTaxNumber}
+                        onChange={(e) => setBizTaxNumber(e.target.value)}
+                        placeholder="TIN-GH-9988776655"
+                        className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 2: Contact, Location & Operational Status */}
+              {bizStep === 2 && (
+                <div className="space-y-3.5 animate-fadeIn">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Business Tagline / Slogan</label>
+                    <input
+                      type="text"
+                      value={bizTagline}
+                      onChange={(e) => setBizTagline(e.target.value)}
+                      placeholder="e.g. Everyday Quality Retail"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Store Contact Phone</label>
+                    <input
+                      type="text"
+                      value={bizPhone}
+                      onChange={(e) => setBizPhone(sanitizePhoneNumber(e.target.value))}
+                      placeholder="+233 24 000 1122"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Business Physical Address</label>
+                    <input
+                      type="text"
+                      value={bizAddress}
+                      onChange={(e) => setBizAddress(e.target.value)}
+                      placeholder="Oxford Street, Osu, Accra"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <CustomSelect
+                      label="Business Operational Status"
+                      options={statusOptions}
+                      value={bizStatus}
+                      onChange={(val) => setBizStatus(val)}
+                      icon={Shield}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: Thermal Receipt Customization & Loyalty */}
+              {bizStep === 3 && (
+                <div className="space-y-3.5 animate-fadeIn">
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Custom Receipt Header Note</label>
+                    <input
+                      type="text"
+                      value={bizReceiptHeaderNote}
+                      onChange={(e) => setBizReceiptHeaderNote(e.target.value)}
+                      placeholder="Welcome to Ave Retail Store"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Custom Receipt Footer Note</label>
+                    <input
+                      type="text"
+                      value={bizReceiptFooterNote}
+                      onChange={(e) => setBizReceiptFooterNote(e.target.value)}
+                      placeholder="No refund without official receipt. Thank you!"
+                      className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-medium"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800">
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-white block text-xs">Thermal Receipt Logo Printing</span>
+                      <span className="text-[10px] text-slate-500">Include business graphics logo header on ESC/POS printouts</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={bizShowLogoOnReceipt}
+                      onChange={(e) => setBizShowLogoOnReceipt(e.target.checked)}
+                      className="w-4 h-4 text-teal-600 rounded cursor-pointer"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-teal-500/5 rounded-2xl border border-teal-500/20 space-y-2">
+                    <label className="block text-teal-700 dark:text-teal-300 font-bold mb-1">
+                      Loyalty Points Earn Rate Configuration
+                    </label>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-xs font-bold text-teal-600 dark:text-teal-400 font-mono">Spend GH₵</span>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={bizLoyaltyEarnRate}
+                        onChange={(e) => setBizLoyaltyEarnRate(Number(e.target.value))}
+                        className="w-24 px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold text-xs"
+                      />
+                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">to earn 1 Loyalty Point</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400">Default rate is 10 (GH₵10 spent = 1 point awarded automatically at checkout).</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Wizard Navigation Footer */}
+              <div className="flex justify-between items-center pt-3 border-t border-slate-200 dark:border-slate-800">
+                <div className="flex space-x-2">
+                  {bizStep > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setBizStep(bizStep - 1)}
+                      className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold cursor-pointer hover:bg-slate-200 transition"
+                    >
+                      ← Back
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setEditBizModalOpen(false)}
+                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl cursor-pointer font-bold hover:bg-slate-200 transition"
+                  >
+                    Cancel
+                  </button>
                 </div>
 
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">TIN / Tax Number</label>
-                  <input
-                    type="text"
-                    value={bizTaxNumber}
-                    onChange={(e) => setBizTaxNumber(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Business Tagline / Slogan</label>
-                <input
-                  type="text"
-                  value={bizTagline}
-                  onChange={(e) => setBizTagline(e.target.value)}
-                  placeholder="Everyday Quality Retail"
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Store Contact Phone</label>
-                <input
-                  type="text"
-                  value={bizPhone}
-                  onChange={(e) => setBizPhone(sanitizePhoneNumber(e.target.value))}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
-                />
-              </div>
-
-              <div>
-                <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Business Physical Address</label>
-                <input
-                  type="text"
-                  value={bizAddress}
-                  onChange={(e) => setBizAddress(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <CustomSelect
-                  label="Business Operational Status"
-                  options={statusOptions}
-                  value={bizStatus}
-                  onChange={(val) => setBizStatus(val)}
-                  icon={Shield}
-                />
-              </div>
-
-              <div className="flex justify-end space-x-2 pt-3">
-                <button
-                  type="button"
-                  onClick={() => setEditBizModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl cursor-pointer font-bold"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-teal-600 text-white font-bold rounded-xl shadow-lg shadow-teal-600/30 cursor-pointer"
-                >
-                  Save Business Changes
-                </button>
+                {bizStep < 3 ? (
+                  <button
+                    type="button"
+                    onClick={() => setBizStep(bizStep + 1)}
+                    className="px-5 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl shadow-lg shadow-teal-600/30 cursor-pointer transition"
+                  >
+                    Next Step →
+                  </button>
+                ) : (
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg shadow-emerald-600/30 cursor-pointer transition"
+                  >
+                    Save All Settings
+                  </button>
+                )}
               </div>
             </form>
           </div>

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 
 interface CustomTooltipProps {
-  content: string;
+  content: React.ReactNode;
   children: React.ReactNode;
   position?: 'top' | 'bottom' | 'left' | 'right';
   align?: 'center' | 'left' | 'right';
@@ -63,7 +63,7 @@ export const CustomTooltip: React.FC<CustomTooltipProps> = ({
         <div
           className={`absolute ${posClass} z-[60] pointer-events-none transition-all duration-150 transform scale-100 opacity-100`}
         >
-          <div className="bg-slate-900 dark:bg-slate-800 text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg shadow-2xl whitespace-nowrap border border-slate-700/60 dark:border-slate-700 max-w-xs text-center">
+          <div className="bg-slate-900 dark:bg-slate-800 text-white text-[11px] leading-relaxed font-semibold px-3 py-2 rounded-xl shadow-2xl whitespace-normal break-words border border-slate-700/60 dark:border-slate-700 w-max max-w-xs sm:max-w-sm text-left">
             {content}
           </div>
           <div className={`absolute w-0 h-0 border-4 ${arrowClass}`} />

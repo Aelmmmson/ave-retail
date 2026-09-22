@@ -144,7 +144,7 @@ export class ShiftService {
     };
   }
 
-  static async closeShift(shiftId: string, actualClosingCash: number) {
+  static async closeShift(shiftId: string, actualClosingCash: number, managerPin?: string) {
     let shift = await prisma.cashierShift.findUnique({
       where: { id: shiftId },
       include: {
@@ -196,13 +196,50 @@ export class ShiftService {
     const expectedClosingCash = Number(shift.openingFloat) + totalCashSales + totalCashIn - totalCashOut;
     const varianceAmount = actualClosingCash - expectedClosingCash;
 
+    let managerApprovalNote = '';
+    // Enforce Manager Override PIN when Variance is Detected
+    if (Math.abs(varianceAmount) > 0.01) {
+      if (!managerPin || !managerPin.trim()) {
+        throw new Error(`CASH VARIANCE DETECTED: Drawer cash differs from expected cash by GH₵ ${Math.abs(varianceAmount).toFixed(2)}. Manager authorization PIN is required to close this shift.`);
+      }
+
+      // Verify Manager PIN against active users with manager/admin privileges
+      const users = await prisma.user.findMany({
+        where: {
+          isActive: true
+        }
+      });
+
+      const validManager = users.find((u: any) =>
+        u.managerPin === managerPin.trim() ||
+        ['OWNER', 'ADMIN', 'MANAGER'].includes(String(u.role))
+      );
+
+      if (!validManager || ((validManager as any).managerPin && (validManager as any).managerPin !== managerPin.trim())) {
+        throw new Error(`INVALID MANAGER PIN: The authorization PIN provided is incorrect or lacks shift override approval mandate.`);
+      }
+
+      managerApprovalNote = `Variance of GH₵ ${varianceAmount.toFixed(2)} approved by Manager ${validManager.name}`;
+      
+      // Audit Log Entry
+      await prisma.auditLog.create({
+        data: {
+          userId: validManager.id,
+          action: 'SHIFT_VARIANCE_OVERRIDE',
+          entity: 'CashierShift',
+          entityId: shift.id,
+          details: `Shift closed with variance of GH₵ ${varianceAmount.toFixed(2)} (Actual: ${actualClosingCash}, Expected: ${expectedClosingCash}). Authorized by ${validManager.name}.`
+        }
+      });
+    }
+
     return prisma.cashierShift.update({
       where: { id: shift.id },
       data: {
         actualClosingCash,
         expectedClosingCash,
         varianceAmount,
-        status: 'CLOSED',
+        status: Math.abs(varianceAmount) > 0.01 ? 'RECONCILED' : 'CLOSED',
         closedAt: new Date()
       }
     });

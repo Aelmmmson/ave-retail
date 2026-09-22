@@ -37,7 +37,8 @@ export class SalesService {
         discountAmount: i.discountAmount
       })),
       data.saleDiscountAmount || 0,
-      taxRates
+      taxRates,
+      data.taxPayer || 'CUSTOMER'
     );
 
     const { change } = calculateChange(cartTotals.grandTotal, data.amountReceived);

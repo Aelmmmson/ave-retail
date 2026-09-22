@@ -1,17 +1,86 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Package, Search, Plus, RefreshCw, AlertTriangle, Boxes, Tag, DollarSign, Layers, Barcode, Printer, Filter, Camera, Check, X, Image as ImageIcon, Upload, Maximize2, Download } from 'lucide-react';
-import { ProductVariantDTO } from '@ave/types';
+import { Package, Search, Plus, RefreshCw, AlertTriangle, Boxes, Tag, DollarSign, Layers, Barcode, Printer, Filter, Camera, Check, X, Image as ImageIcon, Upload, Maximize2, Download, Edit, Percent, Calendar, Clock } from 'lucide-react';
+import { ProductVariantDTO, PromoRule } from '@ave/types';
 import { ApiClient } from '../../lib/api';
 import { formatMoney } from '@ave/shared';
 import { useAlertStore } from '../../store/alertStore';
 import { CustomSelect } from '../../components/CustomSelect';
 import { CustomTooltip } from '../../components/CustomTooltip';
 import { BarcodeScannerModal } from '../../components/BarcodeScannerModal';
+import { PromoBadgeList } from '../../components/PromoBadgeList';
+import { ProductDiscountsModal } from '../../components/ProductDiscountsModal';
 
-export const InventoryView: React.FC = () => {
+interface InventoryViewProps {
+  selectedProductIdToAdjust?: string | null;
+  onClearSelectedProductToAdjust?: () => void;
+}
+
+const getPromoExplanation = (p: ProductVariantDTO): string => {
+  if (p.promoRule && p.promoRule.isActive) {
+    const r = p.promoRule;
+    let desc = '';
+    if (r.type === 'PERCENTAGE') {
+      const orig = p.sellingPrice;
+      const discounted = orig * (1 - r.value / 100);
+      desc = `🔥 ${r.value}% Percentage Off Sale: Reduces standard selling price from ${formatMoney(orig, 'GH₵')} down to ${formatMoney(discounted, 'GH₵')} (${formatMoney(orig - discounted, 'GH₵')} savings per unit).`;
+    } else if (r.type === 'FIXED_AMOUNT') {
+      desc = `🏷️ Flat ${formatMoney(r.value, 'GH₵')} Discount: Deducts ${formatMoney(r.value, 'GH₵')} off standard selling price (${formatMoney(p.sellingPrice, 'GH₵')}).`;
+    } else if (r.type === 'TARGET_PRICE') {
+      desc = `🎯 Special Target Promo Price: Selling price is set to fixed price of ${formatMoney(r.value, 'GH₵')} (Regular ${formatMoney(p.sellingPrice, 'GH₵')}).`;
+    } else if (r.type === 'BOGO') {
+      desc = `🎁 Buy ${r.buyQty || 1} Get ${r.getQtyFree || 1} Free Special: Buy ${r.buyQty || 1} item(s) and get ${r.getQtyFree || 1} extra item(s) free automatically at checkout!`;
+    }
+    if (r.daysOfWeek && r.daysOfWeek.length > 0) {
+      const days = r.daysOfWeek.map((d) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d]).join(', ');
+      desc += ` Valid on: ${days}.`;
+    }
+    if (r.startHour !== undefined && r.endHour !== undefined && r.startHour !== null && r.endHour !== null) {
+      desc += ` Active hours: ${r.startHour}:00 to ${r.endHour}:00.`;
+    }
+    return desc;
+  }
+  if (p.activePromoDiscount && p.activePromoDiscount > 0) {
+    const orig = p.sellingPrice;
+    const discounted = orig * (1 - p.activePromoDiscount / 100);
+    return `🔥 Active ${p.activePromoDiscount}% Promotional Discount: Standard selling price (${formatMoney(orig, 'GH₵')}) is reduced by ${p.activePromoDiscount}% to ${formatMoney(discounted, 'GH₵')}.`;
+  }
+  return 'Active promotional discount applied.';
+};
+
+export const InventoryView: React.FC<InventoryViewProps> = ({
+  selectedProductIdToAdjust,
+  onClearSelectedProductToAdjust
+}) => {
   const [products, setProducts] = useState<ProductVariantDTO[]>([]);
   const [query, setQuery] = useState('');
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+
+  // Edit Product & Promotional Rules Modal State (Item 3 & Item 8)
+  const [editProductModal, setEditProductModal] = useState<ProductVariantDTO | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editVariantName, setEditVariantName] = useState('');
+  const [editSku, setEditSku] = useState('');
+  const [editBarcode, setEditBarcode] = useState('');
+  const [editCostPrice, setEditCostPrice] = useState<number>(0);
+  const [editSellingPrice, setEditSellingPrice] = useState<number>(0);
+  const [editQuantityOnHand, setEditQuantityOnHand] = useState<number>(0);
+  const [editMinStockLevel, setEditMinStockLevel] = useState<number>(5);
+  const [editReorderLevel, setEditReorderLevel] = useState<number>(10);
+  const [editCategory, setEditCategory] = useState('Groceries');
+  const [editImageUrl, setEditImageUrl] = useState('');
+
+  // Promo Rules State (Item 3)
+  const [promoActive, setPromoActive] = useState<boolean>(false);
+  const [promoType, setPromoType] = useState<'PERCENTAGE' | 'FIXED_AMOUNT' | 'TARGET_PRICE' | 'BOGO'>('PERCENTAGE');
+  const [promoValue, setPromoValue] = useState<number>(10);
+  const [targetSellingPriceInput, setTargetSellingPriceInput] = useState<number>(0);
+  const [bogoBuyQty, setBogoBuyQty] = useState<number>(1);
+  const [bogoGetQtyFree, setBogoGetQtyFree] = useState<number>(1);
+  const [promoStartDate, setPromoStartDate] = useState<string>('');
+  const [promoEndDate, setPromoEndDate] = useState<string>('');
+  const [promoStartHour, setPromoStartHour] = useState<number | ''>('');
+  const [promoEndHour, setPromoEndHour] = useState<number | ''>('');
+  const [promoDaysOfWeek, setPromoDaysOfWeek] = useState<number[]>([]);
 
   // Stock Adjust Modal State
   const [adjustModal, setAdjustModal] = useState<ProductVariantDTO | null>(null);
@@ -19,18 +88,62 @@ export const InventoryView: React.FC = () => {
   const [adjustType, setAdjustType] = useState<'STOCK_IN' | 'ADJUSTMENT_DAMAGE'>('STOCK_IN');
   const [adjustNotes, setAdjustNotes] = useState('');
 
+  // Applied Item Discounts Modal State
+  const [discountModalData, setDiscountModalData] = useState<{ isOpen: boolean; variant: any }>({ isOpen: false, variant: null });
+
   // Add New Product & Stock Intake Modal State
   const [addProductModalOpen, setAddProductModalOpen] = useState(false);
   const [newProductName, setNewProductName] = useState('');
   const [newVariantName, setNewVariantName] = useState('Default Unit');
+  const [newSize, setNewSize] = useState('');
+  const [newTypeFlavour, setNewTypeFlavour] = useState('');
   const [newSku, setNewSku] = useState('');
   const [newBarcode, setNewBarcode] = useState('');
+  const [newCostCurrency, setNewCostCurrency] = useState<string>('GHS');
+  const [newSellingCurrency, setNewSellingCurrency] = useState<string>('GHS');
+  const [editCostCurrency, setEditCostCurrency] = useState<string>('GHS');
+  const [editSellingCurrency, setEditSellingCurrency] = useState<string>('GHS');
   const [newCostPrice, setNewCostPrice] = useState<number | ''>(0);
   const [newSellingPrice, setNewSellingPrice] = useState<number | ''>('');
   const [newInitialStock, setNewInitialStock] = useState<number | ''>(10);
+  const [newMinStockLevel, setNewMinStockLevel] = useState<number>(5);
+  const [newReorderLevel, setNewReorderLevel] = useState<number>(10);
   const [newCategory, setNewCategory] = useState('Groceries');
+  const [customCategoryInput, setCustomCategoryInput] = useState('');
+  const [showAddCategoryInput, setShowAddCategoryInput] = useState(false);
+  const [categoriesList, setCategoriesList] = useState<string[]>([
+    'Groceries',
+    'Beverages',
+    'Dairy',
+    'Bakery',
+    'Frozen Foods',
+    'Personal Care',
+    'Cosmetics',
+    'Electronics',
+    'Clothing & Apparel',
+    'Pharmacy & Health',
+    'Household & Cleaning',
+    'Stationery & Office',
+    'General Merchandise'
+  ]);
+  const [newBrand, setNewBrand] = useState('Nestle');
   const [newImageUrl, setNewImageUrl] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Common Presets for Quick Item Configuration
+  const SIZE_PRESETS = ['250ml', '500ml', '1L', '1.5L', '100g', '250g', '500g', '1kg', 'Small', 'Medium', 'Large', 'XL', 'Pack of 6', 'Box of 12'];
+  const TYPE_PRESETS = ['Original', 'Vanilla', 'Chocolate', 'Strawberry', 'Sugar-Free', 'Regular', 'Diet', 'Spicy', 'Mint', 'Premium', 'Whole Wheat'];
+
+  // Brand Management Modal State (CRUD Option 1)
+  const [brandModalOpen, setBrandModalOpen] = useState(false);
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([
+    { id: 'b1', name: 'Nestle' },
+    { id: 'b2', name: 'Coca-Cola Company' },
+    { id: 'b3', name: 'Unilever' },
+    { id: 'b4', name: 'FanMilk Ghana' }
+  ]);
+  const [brandNameInput, setBrandNameInput] = useState('');
+  const [editingBrandId, setEditingBrandId] = useState<string | null>(null);
 
   // Real-Time Barcode Scanner State
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -47,6 +160,16 @@ export const InventoryView: React.FC = () => {
   useEffect(() => {
     loadProducts();
   }, []);
+
+  useEffect(() => {
+    if (selectedProductIdToAdjust && products.length > 0) {
+      const match = products.find(p => p.id === selectedProductIdToAdjust || p.productId === selectedProductIdToAdjust || p.sku === selectedProductIdToAdjust);
+      if (match) {
+        setAdjustModal(match);
+        if (onClearSelectedProductToAdjust) onClearSelectedProductToAdjust();
+      }
+    }
+  }, [selectedProductIdToAdjust, products]);
 
   const loadProducts = async () => {
     try {
@@ -154,6 +277,118 @@ export const InventoryView: React.FC = () => {
     }
   };
 
+  const openEditModal = (p: ProductVariantDTO) => {
+    setEditProductModal(p);
+    setEditName(p.productName);
+    setEditVariantName(p.variantName || 'Default Unit');
+    setEditSku(p.sku);
+    setEditBarcode(p.barcode || '');
+    setEditCostPrice(p.costPrice);
+    setEditSellingPrice(p.sellingPrice);
+    setEditQuantityOnHand(p.quantityOnHand);
+    setEditMinStockLevel(p.minStockLevel || 5);
+    setEditReorderLevel(p.reorderLevel || 10);
+    setEditCategory(p.categoryName || 'Groceries');
+    setEditImageUrl(p.imageUrl || '');
+
+    if (p.promoRule) {
+      setPromoActive(p.promoRule.isActive);
+      setPromoType(p.promoRule.type);
+      setPromoValue(p.promoRule.value);
+      if (p.promoRule.type === 'TARGET_PRICE') {
+        setTargetSellingPriceInput(p.promoRule.value);
+      } else {
+        setTargetSellingPriceInput(p.sellingPrice * 0.8);
+      }
+      setBogoBuyQty(p.promoRule.buyQty || 1);
+      setBogoGetQtyFree(p.promoRule.getQtyFree || 1);
+      setPromoStartDate(p.promoRule.startDate || '');
+      setPromoEndDate(p.promoRule.endDate || '');
+      setPromoStartHour(p.promoRule.startHour !== undefined ? p.promoRule.startHour : '');
+      setPromoEndHour(p.promoRule.endHour !== undefined ? p.promoRule.endHour : '');
+      setPromoDaysOfWeek(p.promoRule.daysOfWeek || []);
+    } else {
+      setPromoActive(false);
+      setPromoType('PERCENTAGE');
+      setPromoValue(10);
+      setTargetSellingPriceInput(p.sellingPrice * 0.8);
+      setBogoBuyQty(1);
+      setBogoGetQtyFree(1);
+      setPromoStartDate('');
+      setPromoEndDate('');
+      setPromoStartHour('');
+      setPromoEndHour('');
+      setPromoDaysOfWeek([]);
+    }
+  };
+
+  const handleSaveProductEdit = () => {
+    if (!editProductModal) return;
+
+    let computedPromoVal = promoValue;
+    let computedActiveDisc = 0;
+
+    if (promoActive) {
+      if (promoType === 'PERCENTAGE') {
+        computedPromoVal = promoValue;
+        computedActiveDisc = promoValue;
+      } else if (promoType === 'TARGET_PRICE') {
+        computedPromoVal = targetSellingPriceInput;
+        const discountAmt = Math.max(0, editSellingPrice - targetSellingPriceInput);
+        computedActiveDisc = editSellingPrice > 0 ? (discountAmt / editSellingPrice) * 100 : 0;
+      } else if (promoType === 'FIXED_AMOUNT') {
+        computedPromoVal = promoValue;
+        computedActiveDisc = editSellingPrice > 0 ? (promoValue / editSellingPrice) * 100 : 0;
+      } else if (promoType === 'BOGO') {
+        computedPromoVal = 0;
+        computedActiveDisc = 50;
+      }
+    }
+
+    const updatedRule: PromoRule | undefined = promoActive
+      ? {
+          id: editProductModal.promoRule?.id || `promo-${Date.now()}`,
+          name: `${promoType} Promo`,
+          type: promoType,
+          value: computedPromoVal,
+          buyQty: bogoBuyQty,
+          getQtyFree: bogoGetQtyFree,
+          startDate: promoStartDate || undefined,
+          endDate: promoEndDate || undefined,
+          startHour: promoStartHour !== '' ? Number(promoStartHour) : undefined,
+          endHour: promoEndHour !== '' ? Number(promoEndHour) : undefined,
+          daysOfWeek: promoDaysOfWeek.length > 0 ? promoDaysOfWeek : undefined,
+          isActive: true
+        }
+      : undefined;
+
+    const updatedProducts = products.map((item) => {
+      if (item.id === editProductModal.id) {
+        return {
+          ...item,
+          productName: editName,
+          variantName: editVariantName,
+          sku: editSku,
+          barcode: editBarcode,
+          costPrice: editCostPrice,
+          sellingPrice: editSellingPrice,
+          quantityOnHand: editQuantityOnHand,
+          minStockLevel: editMinStockLevel,
+          reorderLevel: editReorderLevel,
+          categoryName: editCategory,
+          imageUrl: editImageUrl,
+          activePromoDiscount: promoActive ? Number(computedActiveDisc.toFixed(1)) : undefined,
+          promoRule: updatedRule
+        };
+      }
+      return item;
+    });
+
+    setProducts(updatedProducts);
+    setEditProductModal(null);
+    showToast('success', 'Product & Promo Saved!', `'${editName}' catalog details and promo rules updated successfully.`);
+  };
+
   const handleAddProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newProductName || !newSellingPrice) {
@@ -187,28 +422,14 @@ export const InventoryView: React.FC = () => {
         setProducts([{ ...res.data, imageUrl: imgVal }, ...products]);
       }
     } catch (e: any) {
-      const mockNewItem: ProductVariantDTO = {
-        id: `v-demo-${Date.now()}`,
-        productId: `p-demo-${Date.now()}`,
-        productName: newProductName,
-        variantName: newVariantName || 'Default Unit',
-        sku: skuCode,
-        barcode: barcodeVal,
-        costPrice: Number(newCostPrice) || 0,
-        sellingPrice: Number(newSellingPrice) || 0,
-        minStockLevel: 5,
-        reorderLevel: 10,
-        quantityOnHand: Number(newInitialStock) || 0,
-        categoryName: newCategory || 'Groceries',
-        imageUrl: imgVal
-      };
-      setProducts([mockNewItem, ...products]);
-      showToast('success', 'Product & Stock Added!', `'${newProductName}' added to stock inventory.`);
+      showToast('error', 'Product Addition Failed', e.message || 'Could not save product to database.');
     } finally {
       setIsSubmitting(false);
       setAddProductModalOpen(false);
       setNewProductName('');
       setNewVariantName('Default Unit');
+      setNewSize('');
+      setNewTypeFlavour('');
       setNewSku('');
       setNewBarcode('');
       setNewCostPrice(0);
@@ -313,6 +534,14 @@ export const InventoryView: React.FC = () => {
           </div>
 
           <button
+            onClick={() => setBrandModalOpen(true)}
+            className="px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl border border-slate-300 dark:border-slate-700 transition flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+          >
+            <Tag className="w-4 h-4 text-teal-600 dark:text-teal-400" />
+            <span>Manage Brands</span>
+          </button>
+
+          <button
             onClick={() => setAddProductModalOpen(true)}
             className="px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-teal-600/30 transition flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
           >
@@ -401,8 +630,18 @@ export const InventoryView: React.FC = () => {
                         <div className="text-[10px] text-teal-600 dark:text-teal-400">{p.barcode}</div>
                       </td>
                       <td className="px-4 py-3 text-slate-500 dark:text-slate-400">{p.categoryName || 'General'}</td>
-                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-300">{formatMoney(p.costPrice, 'GH₵')}</td>
-                      <td className="px-4 py-3 font-mono font-bold text-teal-600 dark:text-teal-400">{formatMoney(p.sellingPrice, 'GH₵')}</td>
+                      <td className="px-4 py-3 font-mono text-slate-600 dark:text-slate-300">
+                        <div>{formatMoney(p.costPrice, 'GH₵')}</div>
+                      </td>
+                      <td className="px-4 py-3 font-mono font-bold text-teal-600 dark:text-teal-400">
+                        <div>{formatMoney(p.sellingPrice, 'GH₵')}</div>
+                        <PromoBadgeList
+                          promoRules={p.promoRules}
+                          activePromoDiscount={p.activePromoDiscount}
+                          promoRule={p.promoRule}
+                          onOpenModal={() => setDiscountModalData({ isOpen: true, variant: p })}
+                        />
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold font-mono inline-flex items-center space-x-1 ${
                           isNegative
@@ -417,6 +656,16 @@ export const InventoryView: React.FC = () => {
                       </td>
                       <td className="px-4 py-3 text-right">
                         <div className="flex items-center justify-end space-x-1.5 ml-auto">
+                          <CustomTooltip content="Edit Item Details & Set Promotional Discount Rules">
+                            <button
+                              onClick={() => openEditModal(p)}
+                              className="px-2.5 py-1.5 bg-teal-500/10 hover:bg-teal-600 text-teal-600 dark:text-teal-400 hover:text-white rounded-lg border border-teal-500/30 text-xs font-bold transition flex items-center space-x-1 cursor-pointer"
+                            >
+                              <Edit className="w-3.5 h-3.5" />
+                              <span>Edit Product</span>
+                            </button>
+                          </CustomTooltip>
+
                           <CustomTooltip content="Print Barcode & Price Tag Labels">
                             <button
                               onClick={() => {
@@ -434,7 +683,7 @@ export const InventoryView: React.FC = () => {
                               setAdjustModal(p);
                               setAdjustQty(10);
                             }}
-                            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-teal-600 text-slate-700 dark:text-slate-200 hover:text-white rounded-lg border border-slate-300 dark:border-slate-700 font-semibold transition cursor-pointer"
+                            className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-teal-600 text-slate-700 dark:text-slate-200 hover:text-white rounded-lg border border-slate-300 dark:border-slate-700 font-semibold transition cursor-pointer"
                           >
                             Adjust Stock
                           </button>
@@ -574,26 +823,195 @@ export const InventoryView: React.FC = () => {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Category & Brand Section */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Unit / Variant</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold">Category</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddCategoryInput(!showAddCategoryInput)}
+                      className="text-[10px] text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer"
+                    >
+                      {showAddCategoryInput ? 'Choose Existing' : '+ Add Custom Category'}
+                    </button>
+                  </div>
+                  {showAddCategoryInput ? (
+                    <div className="flex space-x-1.5">
+                      <input
+                        type="text"
+                        value={customCategoryInput}
+                        onChange={(e) => setCustomCategoryInput(e.target.value)}
+                        placeholder="New category name..."
+                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const trimmed = customCategoryInput.trim();
+                          if (trimmed && !categoriesList.includes(trimmed)) {
+                            setCategoriesList([...categoriesList, trimmed]);
+                            setNewCategory(trimmed);
+                            setCustomCategoryInput('');
+                            setShowAddCategoryInput(false);
+                            showToast('success', 'Category Added', `Category '${trimmed}' created.`);
+                          }
+                        }}
+                        className="px-3 py-2 bg-teal-600 text-white font-bold rounded-xl text-xs hover:bg-teal-500 cursor-pointer shrink-0"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  ) : (
+                    <CustomSelect
+                      value={newCategory}
+                      onChange={(val) => setNewCategory(val)}
+                      options={categoriesList.map(c => ({ value: c, label: c }))}
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold">Manufacturer Brand</label>
+                    <button
+                      type="button"
+                      onClick={() => setBrandModalOpen(true)}
+                      className="text-[10px] text-teal-600 dark:text-teal-400 font-bold hover:underline cursor-pointer"
+                    >
+                      + Manage Brands
+                    </button>
+                  </div>
+                  <CustomSelect
+                    value={newBrand}
+                    onChange={(val) => setNewBrand(val)}
+                    options={brands.map(b => ({ value: b.name, label: b.name }))}
+                  />
+                </div>
+              </div>
+
+              {/* Item Specifications: Sizes, Types, Flavours */}
+              <div className="p-3 bg-slate-100/70 dark:bg-slate-950/80 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
+                <div className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                  <span>Item Specifications (Size, Volume, Type & Flavour)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Click presets to set values</span>
+                </div>
+
+                {/* Size / Volume / Weight Picker */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold">Size / Volume / Weight</label>
+                    {newSize && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewSize('');
+                          const parts = [newTypeFlavour].filter(Boolean);
+                          setNewVariantName(parts.length ? parts.join(' / ') : 'Default Unit');
+                        }}
+                        className="text-[10px] text-rose-500 font-bold hover:underline cursor-pointer"
+                      >
+                        Clear Size
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={newSize}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewSize(val);
+                      const parts = [val, newTypeFlavour].filter(Boolean);
+                      setNewVariantName(parts.length ? parts.join(' / ') : 'Default Unit');
+                    }}
+                    placeholder="e.g. 500ml, 1kg, Large, Pack of 6..."
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs mb-1.5"
+                  />
+                  {/* Preset Chips */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {SIZE_PRESETS.map((sz) => (
+                      <button
+                        type="button"
+                        key={sz}
+                        onClick={() => {
+                          setNewSize(sz);
+                          const parts = [sz, newTypeFlavour].filter(Boolean);
+                          setNewVariantName(parts.length ? parts.join(' / ') : 'Default Unit');
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition cursor-pointer border ${
+                          newSize === sz
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-teal-500'
+                        }`}
+                      >
+                        {sz}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Type / Flavour / Style Picker */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold">Type / Flavour / Style</label>
+                    {newTypeFlavour && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNewTypeFlavour('');
+                          const parts = [newSize].filter(Boolean);
+                          setNewVariantName(parts.length ? parts.join(' / ') : 'Default Unit');
+                        }}
+                        className="text-[10px] text-rose-500 font-bold hover:underline cursor-pointer"
+                      >
+                        Clear Type/Flavour
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={newTypeFlavour}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setNewTypeFlavour(val);
+                      const parts = [newSize, val].filter(Boolean);
+                      setNewVariantName(parts.length ? parts.join(' / ') : 'Default Unit');
+                    }}
+                    placeholder="e.g. Vanilla, Chocolate, Original, Sugar-Free..."
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white text-xs mb-1.5"
+                  />
+                  {/* Preset Chips */}
+                  <div className="flex flex-wrap gap-1.5">
+                    {TYPE_PRESETS.map((tf) => (
+                      <button
+                        type="button"
+                        key={tf}
+                        onClick={() => {
+                          setNewTypeFlavour(tf);
+                          const parts = [newSize, tf].filter(Boolean);
+                          setNewVariantName(parts.length ? parts.join(' / ') : 'Default Unit');
+                        }}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-semibold transition cursor-pointer border ${
+                          newTypeFlavour === tf
+                            ? 'bg-teal-600 text-white border-teal-600 shadow-sm'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-teal-500'
+                        }`}
+                      >
+                        {tf}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Final Assembled Unit / Variant Name */}
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Final Unit / Variant Label</label>
                   <input
                     type="text"
                     value={newVariantName}
                     onChange={(e) => setNewVariantName(e.target.value)}
-                    placeholder="e.g. 400g Tin"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Category</label>
-                  <input
-                    type="text"
-                    value={newCategory}
-                    onChange={(e) => setNewCategory(e.target.value)}
-                    placeholder="e.g. Groceries"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                    placeholder="e.g. 500ml Bottle / Vanilla Flavour"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-teal-500/50 rounded-xl text-slate-900 dark:text-white font-bold text-xs"
                   />
                 </div>
               </div>
@@ -633,34 +1051,89 @@ export const InventoryView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Cost Price (GH₵)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={newCostPrice}
-                    onChange={(e) => setNewCostPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    placeholder="0.00"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
-                  />
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold">Cost Price</label>
+                    <div className="w-32">
+                      <CustomSelect
+                        value={newCostCurrency}
+                        onChange={(val) => setNewCostCurrency(val)}
+                        options={[
+                          { value: 'GHS', label: 'GHS (GH₵)' },
+                          { value: 'USD', label: 'USD ($)' },
+                          { value: 'EUR', label: 'EUR (€)' },
+                          { value: 'GBP', label: 'GBP (£)' },
+                          { value: 'CNY', label: 'CNY (¥)' }
+                        ]}
+                      />
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 font-bold text-xs text-slate-400 font-mono">
+                      {newCostCurrency === 'USD' ? '$' : newCostCurrency === 'EUR' ? '€' : newCostCurrency === 'GBP' ? '£' : newCostCurrency === 'CNY' ? '¥' : 'GH₵'}
+                    </span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={newCostPrice}
+                      onChange={(e) => setNewCostPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="0.00"
+                      className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
+                    />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Selling Price (GH₵) *</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    required
-                    value={newSellingPrice}
-                    onChange={(e) => setNewSellingPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                    placeholder="0.00"
-                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
-                  />
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-slate-700 dark:text-slate-300 font-semibold">Selling Price *</label>
+                    <div className="w-32">
+                      <CustomSelect
+                        value={newSellingCurrency}
+                        onChange={(val) => setNewSellingCurrency(val)}
+                        options={[
+                          { value: 'GHS', label: 'GHS (GH₵)' },
+                          { value: 'USD', label: 'USD ($)' },
+                          { value: 'EUR', label: 'EUR (€)' },
+                          { value: 'GBP', label: 'GBP (£)' },
+                          { value: 'CNY', label: 'CNY (¥)' }
+                        ]}
+                      />
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 font-bold text-xs text-teal-600 font-mono">
+                      {newSellingCurrency === 'USD' ? '$' : newSellingCurrency === 'EUR' ? '€' : newSellingCurrency === 'GBP' ? '£' : newSellingCurrency === 'CNY' ? '¥' : 'GH₵'}
+                    </span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      value={newSellingPrice}
+                      onChange={(e) => setNewSellingPrice(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      placeholder="0.00"
+                      className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
+                    />
+                  </div>
                 </div>
+              </div>
 
+              {/* Multi-Currency Exchange Rate Alert Banner */}
+              {newCostCurrency !== newSellingCurrency && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs space-y-1">
+                  <div className="font-bold text-amber-700 dark:text-amber-400 flex items-center space-x-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>Multi-Currency Cost & Selling Valuation Alert</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                    Cost is set in <span className="font-bold text-amber-600 dark:text-amber-300">{newCostCurrency}</span> while Selling Price is in <span className="font-bold text-teal-600 dark:text-teal-400">{newSellingCurrency}</span>. The system real-time rate (1 {newCostCurrency} = {newCostCurrency === 'USD' ? '15.80' : newCostCurrency === 'EUR' ? '17.20' : newCostCurrency === 'GBP' ? '20.10' : newCostCurrency === 'CNY' ? '2.20' : '1.00'} {newSellingCurrency}) will be recorded upon form submission to ensure financial reports align properly.
+                  </p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-3 gap-3">
                 <div>
                   <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Initial Stock Intake</label>
                   <input
@@ -670,6 +1143,30 @@ export const InventoryView: React.FC = () => {
                     onChange={(e) => setNewInitialStock(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                     placeholder="10"
                     className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono font-bold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Min Stock Level</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newMinStockLevel}
+                    onChange={(e) => setNewMinStockLevel(Number(e.target.value))}
+                    placeholder="5"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 dark:text-slate-300 font-semibold mb-1">Reorder Point</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newReorderLevel}
+                    onChange={(e) => setNewReorderLevel(Number(e.target.value))}
+                    placeholder="10"
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-mono"
                   />
                 </div>
               </div>
@@ -817,6 +1314,551 @@ export const InventoryView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL 6: Brand Management Modal (CRUD Option 1) */}
+      {brandModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
+              <h3 className="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                <Tag className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                <span>Brand Management</span>
+              </h3>
+              <button onClick={() => setBrandModalOpen(false)} className="text-slate-400 hover:text-white cursor-pointer">✕</button>
+            </div>
+
+            {/* Add / Edit Brand Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!brandNameInput) return;
+                if (editingBrandId) {
+                  setBrands(brands.map(b => b.id === editingBrandId ? { ...b, name: brandNameInput } : b));
+                  showToast('success', 'Brand Updated', `Brand renamed to '${brandNameInput}'.`);
+                  setEditingBrandId(null);
+                } else {
+                  setBrands([...brands, { id: `b-${Date.now()}`, name: brandNameInput }]);
+                  showToast('success', 'Brand Created', `New brand '${brandNameInput}' added.`);
+                }
+                setBrandNameInput('');
+              }}
+              className="flex items-center space-x-2 text-xs"
+            >
+              <input
+                type="text"
+                required
+                value={brandNameInput}
+                onChange={(e) => setBrandNameInput(e.target.value)}
+                placeholder={editingBrandId ? 'Update brand name...' : 'Enter new brand name...'}
+                className="flex-1 px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white font-bold rounded-xl shrink-0 cursor-pointer"
+              >
+                {editingBrandId ? 'Save' : 'Add Brand'}
+              </button>
+              {editingBrandId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingBrandId(null);
+                    setBrandNameInput('');
+                  }}
+                  className="px-3 py-2 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+              )}
+            </form>
+
+            {/* Registered Brands List */}
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              <span className="text-[10px] text-slate-400 uppercase font-bold block">Registered Brands ({brands.length})</span>
+              {brands.map((b) => (
+                <div key={b.id} className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="font-bold text-slate-900 dark:text-slate-100">{b.name}</span>
+                  <div className="flex items-center space-x-1">
+                    <button
+                      onClick={() => {
+                        setEditingBrandId(b.id);
+                        setBrandNameInput(b.name);
+                      }}
+                      className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-teal-600 hover:text-white text-slate-600 dark:text-slate-300 rounded-lg text-[10px] font-bold cursor-pointer transition"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => {
+                        setBrands(brands.filter(x => x.id !== b.id));
+                        showToast('info', 'Brand Deleted', `Brand '${b.name}' deleted.`);
+                      }}
+                      className="px-2 py-1 bg-rose-50 dark:bg-rose-950 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg text-[10px] font-bold cursor-pointer transition"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setBrandModalOpen(false)}
+                className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Edit Product & Advanced Promotional Discount Engine (Prompt 3 & Prompt 8) */}
+      {editProductModal && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 w-full max-w-2xl space-y-4 shadow-2xl overflow-y-auto max-h-[90vh] text-slate-900 dark:text-slate-100">
+            <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Edit className="w-5 h-5 text-teal-600 dark:text-teal-400" />
+                <h3 className="font-extrabold text-base">Edit Product Catalog & Stock Details</h3>
+              </div>
+              <button onClick={() => setEditProductModal(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Product Name</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Variant Name</label>
+                <input
+                  type="text"
+                  value={editVariantName}
+                  onChange={(e) => setEditVariantName(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-bold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">SKU Code</label>
+                <input
+                  type="text"
+                  value={editSku}
+                  onChange={(e) => setEditSku(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Barcode</label>
+                <input
+                  type="text"
+                  value={editBarcode}
+                  onChange={(e) => setEditBarcode(e.target.value)}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">Cost Price</label>
+                  <div className="w-32">
+                    <CustomSelect
+                      value={editCostCurrency}
+                      onChange={(val) => setEditCostCurrency(val)}
+                      options={[
+                        { value: 'GHS', label: 'GHS (GH₵)' },
+                        { value: 'USD', label: 'USD ($)' },
+                        { value: 'EUR', label: 'EUR (€)' },
+                        { value: 'GBP', label: 'GBP (£)' },
+                        { value: 'CNY', label: 'CNY (¥)' }
+                      ]}
+                    />
+                  </div>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 font-bold text-xs text-slate-400 font-mono">
+                    {editCostCurrency === 'USD' ? '$' : editCostCurrency === 'EUR' ? '€' : editCostCurrency === 'GBP' ? '£' : editCostCurrency === 'CNY' ? '¥' : 'GH₵'}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editCostPrice}
+                    onChange={(e) => setEditCostPrice(Number(e.target.value))}
+                    className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">Standard Selling Price *</label>
+                  <div className="w-32">
+                    <CustomSelect
+                      value={editSellingCurrency}
+                      onChange={(val) => setEditSellingCurrency(val)}
+                      options={[
+                        { value: 'GHS', label: 'GHS (GH₵)' },
+                        { value: 'USD', label: 'USD ($)' },
+                        { value: 'EUR', label: 'EUR (€)' },
+                        { value: 'GBP', label: 'GBP (£)' },
+                        { value: 'CNY', label: 'CNY (¥)' }
+                      ]}
+                    />
+                  </div>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 font-bold text-xs text-teal-600 font-mono">
+                    {editSellingCurrency === 'USD' ? '$' : editSellingCurrency === 'EUR' ? '€' : editSellingCurrency === 'GBP' ? '£' : editSellingCurrency === 'CNY' ? '¥' : 'GH₵'}
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={editSellingPrice}
+                    onChange={(e) => setEditSellingPrice(Number(e.target.value))}
+                    className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-mono font-bold text-teal-600 dark:text-teal-400"
+                  />
+                </div>
+              </div>
+
+              {editCostCurrency !== editSellingCurrency && (
+                <div className="col-span-1 sm:col-span-2 p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-xs space-y-1">
+                  <div className="font-bold text-amber-700 dark:text-amber-400 flex items-center space-x-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>Multi-Currency Cost & Selling Valuation Alert</span>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300">
+                    Cost is set in <span className="font-bold text-amber-600 dark:text-amber-300">{editCostCurrency}</span> while Selling Price is in <span className="font-bold text-teal-600 dark:text-teal-400">{editSellingCurrency}</span>. The system real-time exchange rate will be recorded to align accounting reports.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Current Stock Quantity</label>
+                <input
+                  type="number"
+                  value={editQuantityOnHand}
+                  onChange={(e) => setEditQuantityOnHand(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-mono font-bold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Reorder Level Alert</label>
+                <input
+                  type="number"
+                  value={editReorderLevel}
+                  onChange={(e) => setEditReorderLevel(Number(e.target.value))}
+                  className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-slate-900 dark:text-white"
+                />
+              </div>
+            </div>
+
+            {/* SECTION 2: Advanced Promotional Discount Engine Configurator (Prompt 3) */}
+            <div className="p-4 bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-4 text-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Percent className="w-4 h-4 text-rose-500" />
+                  <span className="font-extrabold text-sm text-slate-900 dark:text-white">Catalog Promotional Discount Engine</span>
+                </div>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={promoActive}
+                    onChange={(e) => setPromoActive(e.target.checked)}
+                    className="w-4 h-4 rounded text-rose-600 focus:ring-rose-500"
+                  />
+                  <span className="font-bold text-rose-600 dark:text-rose-400">Enable Promo Sales</span>
+                </label>
+              </div>
+
+              {promoActive && (
+                <div className="space-y-4 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  {/* Promo Type Options */}
+                  <div>
+                    <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1.5">Promotion Model Type</span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPromoType('PERCENTAGE')}
+                        className={`py-2 px-3 rounded-xl font-bold border transition ${
+                          promoType === 'PERCENTAGE'
+                            ? 'bg-rose-600 text-white border-rose-600 shadow'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        Percentage Off
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPromoType('FIXED_AMOUNT')}
+                        className={`py-2 px-3 rounded-xl font-bold border transition ${
+                          promoType === 'FIXED_AMOUNT'
+                            ? 'bg-rose-600 text-white border-rose-600 shadow'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        Fixed Amount Off
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPromoType('TARGET_PRICE')}
+                        className={`py-2 px-3 rounded-xl font-bold border transition ${
+                          promoType === 'TARGET_PRICE'
+                            ? 'bg-rose-600 text-white border-rose-600 shadow'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        Target Promo Price
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPromoType('BOGO')}
+                        className={`py-2 px-3 rounded-xl font-bold border transition ${
+                          promoType === 'BOGO'
+                            ? 'bg-rose-600 text-white border-rose-600 shadow'
+                            : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+                        }`}
+                      >
+                        Buy 1 Get 1 (BOGO)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Type Specific Fields */}
+                  {promoType === 'PERCENTAGE' && (
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Discount Percentage (%)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="100"
+                        value={promoValue}
+                        onChange={(e) => setPromoValue(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  )}
+
+                  {promoType === 'FIXED_AMOUNT' && (
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Fixed Discount Amount Off (GH₵)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={promoValue}
+                        onChange={(e) => setPromoValue(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                  )}
+
+                  {/* Target Price Auto-Calculator (Prompt 3 feature) */}
+                  {promoType === 'TARGET_PRICE' && (
+                    <div className="space-y-2 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                        Enter Desired Promo Selling Price (GH₵)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={targetSellingPriceInput}
+                        onChange={(e) => setTargetSellingPriceInput(Number(e.target.value))}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono font-extrabold text-rose-600 dark:text-rose-400 text-sm"
+                        placeholder="e.g. 8.00"
+                      />
+                      {editSellingPrice > 0 && targetSellingPriceInput > 0 && (
+                        <div className="p-2.5 bg-white dark:bg-slate-900 rounded-lg text-xs font-semibold flex items-center justify-between border border-rose-200 dark:border-rose-900">
+                          <span>Calculated Discount Output:</span>
+                          <span className="font-bold text-rose-600 dark:text-rose-400 font-mono">
+                            {(((editSellingPrice - targetSellingPriceInput) / editSellingPrice) * 100).toFixed(1)}% OFF (Savings: GH₵ {(editSellingPrice - targetSellingPriceInput).toFixed(2)})
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {promoType === 'BOGO' && (
+                    <div className="grid grid-cols-2 gap-3 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Buy Quantity (N)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={bogoBuyQty}
+                          onChange={(e) => setBogoBuyQty(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono font-bold"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1">Get Free Quantity (M)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={bogoGetQtyFree}
+                          onChange={(e) => setBogoGetQtyFree(Number(e.target.value))}
+                          className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono font-bold"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Schedule, Days of Week & Hour Range Settings */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center space-x-1">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>Start Date (Optional)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={promoStartDate}
+                        onChange={(e) => setPromoStartDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center space-x-1">
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>End Date (Leave blank if active until turned off)</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={promoEndDate}
+                        onChange={(e) => setPromoEndDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Days of Week Selection (Requirement 4) */}
+                  <div className="pt-1">
+                    <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block mb-1.5">
+                      Active Days of the Week (Click to select/unselect specific days e.g. Tuesday-only promos)
+                    </span>
+                    <div className="grid grid-cols-7 gap-1">
+                      {[
+                        { day: 0, label: 'Sun' },
+                        { day: 1, label: 'Mon' },
+                        { day: 2, label: 'Tue' },
+                        { day: 3, label: 'Wed' },
+                        { day: 4, label: 'Thu' },
+                        { day: 5, label: 'Fri' },
+                        { day: 6, label: 'Sat' }
+                      ].map((item) => {
+                        const isSelected = promoDaysOfWeek.includes(item.day);
+                        return (
+                          <button
+                            key={item.day}
+                            type="button"
+                            onClick={() => {
+                              if (isSelected) {
+                                setPromoDaysOfWeek(promoDaysOfWeek.filter((d) => d !== item.day));
+                              } else {
+                                setPromoDaysOfWeek([...promoDaysOfWeek, item.day]);
+                              }
+                            }}
+                            className={`py-1.5 rounded-lg font-bold text-[11px] border transition ${
+                              isSelected
+                                ? 'bg-rose-600 text-white border-rose-600 shadow'
+                                : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            }`}
+                          >
+                            {item.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <span className="text-[10px] text-slate-400 block mt-1">
+                      {promoDaysOfWeek.length === 0
+                        ? '* Promo applies on ALL days of the week.'
+                        : `* Active only on: ${promoDaysOfWeek.map((d) => ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][d]).join(', ')}.`}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center space-x-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Happy Hour Start (0-23)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="23"
+                        placeholder="e.g. 14 for 2PM"
+                        value={promoStartHour}
+                        onChange={(e) => setPromoStartHour(e.target.value !== '' ? Number(e.target.value) : '')}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 mb-1 flex items-center space-x-1">
+                        <Clock className="w-3.5 h-3.5" />
+                        <span>Happy Hour End (0-23)</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="23"
+                        placeholder="e.g. 18 for 6PM"
+                        value={promoEndHour}
+                        onChange={(e) => setPromoEndHour(e.target.value !== '' ? Number(e.target.value) : '')}
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl font-mono text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditProductModal(null)}
+                className="px-4 py-2.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl font-bold text-xs hover:bg-slate-200 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveProductEdit}
+                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-500 text-white font-extrabold rounded-xl text-xs shadow-lg shadow-teal-600/30 transition flex items-center space-x-1.5 cursor-pointer"
+              >
+                <Check className="w-4 h-4" />
+                <span>Save Catalog & Promo Changes</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Applied Item Discounts Modal (Requirement 2) */}
+      {discountModalData.isOpen && discountModalData.variant && (
+        <ProductDiscountsModal
+          isOpen={discountModalData.isOpen}
+          onClose={() => setDiscountModalData({ isOpen: false, variant: null })}
+          productName={discountModalData.variant.productName}
+          variantName={discountModalData.variant.variantName}
+          sku={discountModalData.variant.sku}
+          sellingPrice={discountModalData.variant.sellingPrice}
+          promoRules={
+            Array.isArray(discountModalData.variant.promoRules) && discountModalData.variant.promoRules.length > 0
+              ? discountModalData.variant.promoRules
+              : discountModalData.variant.promoRule
+              ? [discountModalData.variant.promoRule]
+              : []
+          }
+        />
       )}
     </div>
   );
